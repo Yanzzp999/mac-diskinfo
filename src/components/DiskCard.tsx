@@ -2,7 +2,10 @@ import { useState } from 'react';
 import type { DiskDevice, SmartReport } from '../shared/types';
 import { StatusBadge } from './StatusBadge';
 import { SmartDetail } from './SmartDetail';
-import { ChevronDown, ChevronUp, HardDrive, Cpu, Database } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import hddImg from '../assets/hdd.png';
+import ssdImg from '../assets/ssd.png';
+import nvmeImg from '../assets/nvme.png';
 
 interface DiskCardProps {
   device: DiskDevice;
@@ -37,18 +40,12 @@ export function DiskCard({ device }: DiskCardProps) {
   // Handle fallback or explicit HDD markers. By default, if it's not SolidState but we parsed details, it's an HDD.
   const diskType = device.isSolidState === false ? 'HDD' : (isNVMe ? 'NVMe' : 'SSD');
 
-  let TransportIcon = Database;
-  let iconColor = "text-emerald-400";
-  let iconBg = "bg-emerald-500/10 group-hover/card:bg-emerald-500/20";
+  let TransportImg = ssdImg;
 
   if (diskType === 'HDD') {
-    TransportIcon = HardDrive;
-    iconColor = "text-amber-400";
-    iconBg = "bg-amber-500/10 group-hover/card:bg-amber-500/20";
+    TransportImg = hddImg;
   } else if (diskType === 'NVMe') {
-    TransportIcon = Cpu;
-    iconColor = "text-purple-400";
-    iconBg = "bg-purple-500/10 group-hover/card:bg-purple-500/20";
+    TransportImg = nvmeImg;
   }
 
   return (
@@ -59,8 +56,8 @@ export function DiskCard({ device }: DiskCardProps) {
         onClick={fetchSmartData}
       >
         <div className="flex items-center space-x-5">
-          <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 group-hover/card:scale-110 ${iconBg} ${iconColor}`}>
-            <TransportIcon className="w-6 h-6" />
+          <div className="flex-shrink-0 w-16 h-16 rounded-xl border border-white/10 overflow-hidden bg-[#1e293b] shadow-md transition-transform duration-300 group-hover/card:scale-105">
+            <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-cover select-none" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-slate-100 flex items-center">
