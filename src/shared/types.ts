@@ -6,6 +6,7 @@ export interface DiskDevice {
   serial?: string;
   sizeBytes: number;
   isInternal: boolean;
+  isSolidState?: boolean;
   transport: string;       // "NVMe", "SATA", "USB", "Apple Fabric"
   smartSupported: boolean;
   smartStatus?: string;    // "Verified", "Failing", etc.

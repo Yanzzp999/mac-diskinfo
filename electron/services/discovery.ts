@@ -30,6 +30,7 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
         
         const bsdName = info.DeviceIdentifier || d;
         let isInternal = info.Internal === true;
+        let isSolidState = info.SolidState === true;
         let transport = info.BusProtocol || 'Unknown';
         if (transport === 'Apple Fabric') isInternal = true; 
 
@@ -63,6 +64,7 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
           serial: serial,
           sizeBytes: info.IOKitSize || info.TotalSize || 0,
           isInternal,
+          isSolidState,
           transport,
           smartSupported: true, 
           smartStatus

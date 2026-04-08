@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { DiskDevice, SmartReport } from '../shared/types';
 import { StatusBadge } from './StatusBadge';
 import { SmartDetail } from './SmartDetail';
-import { ChevronDown, ChevronUp, Usb, Cpu, Server } from 'lucide-react';
+import { ChevronDown, ChevronUp, HardDrive, Cpu, Database } from 'lucide-react';
 
 interface DiskCardProps {
   device: DiskDevice;
@@ -33,10 +33,23 @@ export function DiskCard({ device }: DiskCardProps) {
     return gb >= 1000 ? `${(gb / 1000).toFixed(2)} TB` : `${gb.toFixed(0)} GB`;
   };
 
-  // Determine icon based on transport
-  let TransportIcon = Server;
-  if (device.transport.toUpperCase().includes('USB')) TransportIcon = Usb;
-  else if (device.transport.toUpperCase().includes('NVME') || device.transport.toUpperCase().includes('FABRIC') || device.transport.toUpperCase().includes('PCI')) TransportIcon = Cpu;
+  const isNVMe = device.transport.toUpperCase().includes('NVME') || device.transport.toUpperCase().includes('FABRIC') || device.transport.toUpperCase().includes('PCI');
+  // Handle fallback or explicit HDD markers. By default, if it's not SolidState but we parsed details, it's an HDD.
+  const diskType = device.isSolidState === false ? 'HDD' : (isNVMe ? 'NVMe' : 'SSD');
+
+  let TransportIcon = Database;
+  let iconColor = "text-emerald-400";
+  let iconBg = "bg-emerald-500/10 group-hover/card:bg-emerald-500/20";
+
+  if (diskType === 'HDD') {
+    TransportIcon = HardDrive;
+    iconColor = "text-amber-400";
+    iconBg = "bg-amber-500/10 group-hover/card:bg-amber-500/20";
+  } else if (diskType === 'NVMe') {
+    TransportIcon = Cpu;
+    iconColor = "text-purple-400";
+    iconBg = "bg-purple-500/10 group-hover/card:bg-purple-500/20";
+  }
 
   return (
     <div className="bg-surface rounded-2xl border border-white/10 overflow-hidden shadow-lg transition-all duration-300 hover:border-white/20 group/card">
@@ -46,7 +59,7 @@ export function DiskCard({ device }: DiskCardProps) {
         onClick={fetchSmartData}
       >
         <div className="flex items-center space-x-5">
-          <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover/card:scale-110 group-hover/card:bg-blue-500/20 transition-all duration-300">
+          <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 group-hover/card:scale-110 ${iconBg} ${iconColor}`}>
             <TransportIcon className="w-6 h-6" />
           </div>
           <div>
@@ -55,7 +68,8 @@ export function DiskCard({ device }: DiskCardProps) {
             </h3>
             <div className="flex flex-wrap gap-2 mt-2 items-center">
               <StatusBadge label={device.bsdName} type="default" />
-              <StatusBadge label={device.isInternal ? 'Internal' : 'External'} type={device.isInternal ? 'info' : 'warning'} />
+              <StatusBadge label={diskType} type="info" />
+              <StatusBadge label={device.isInternal ? 'Internal' : 'External'} type={device.isInternal ? 'default' : 'warning'} />
               <StatusBadge label={formatSize(device.sizeBytes)} type="default" />
               <StatusBadge label={device.transport} type="default" />
               {device.smartStatus && device.smartStatus.includes('Verified') && <StatusBadge label="Verified" type="success" />}
