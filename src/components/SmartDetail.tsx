@@ -151,11 +151,44 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
         </>
       )}
 
-      {/* No SMART report loaded yet */}
-      {!loading && !report && (
-        <div className="text-center py-12 text-slate-500">
-          <HardDrive className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p>Loading SMART data...</p>
+      {/* Volumes & File Systems */}
+      {device.volumes && device.volumes.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
+            <Database className="w-4 h-4 text-cyan-400" />
+            Volumes & File Systems
+          </h3>
+          <div className="rounded-xl border border-white/10 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-white/5 text-slate-400 text-xs uppercase tracking-wider">
+                  <th className="text-left py-2.5 px-4 font-medium">Volume</th>
+                  <th className="text-left py-2.5 px-4 font-medium">File System</th>
+                  <th className="text-left py-2.5 px-4 font-medium">Mount Point</th>
+                  <th className="text-right py-2.5 px-4 font-medium">Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {device.volumes.map((vol, i) => (
+                  <tr key={vol.bsdName} className={`border-t border-white/5 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'} hover:bg-white/[0.04] transition-colors`}>
+                    <td className="py-2.5 px-4">
+                      <div className="font-medium text-slate-200">{vol.name}</div>
+                      <div className="text-xs text-slate-500">{vol.bsdName}</div>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <StatusBadge label={vol.fileSystem || 'Unknown'} type="info" />
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-400 font-mono text-xs">
+                      {vol.mountPoint || '—'}
+                    </td>
+                    <td className="py-2.5 px-4 text-right text-slate-300">
+                      {formatSize(vol.sizeBytes)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

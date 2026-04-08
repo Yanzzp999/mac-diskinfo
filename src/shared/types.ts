@@ -1,3 +1,12 @@
+export interface Volume {
+  name: string;
+  bsdName: string;
+  fileSystem?: string;
+  mountPoint?: string;
+  sizeBytes: number;
+  capacityUsed?: number;
+}
+
 export interface DiskDevice {
   id: string;              // Unique ID (bsd_name)
   bsdName: string;         // e.g. "disk0"
@@ -10,6 +19,7 @@ export interface DiskDevice {
   transport: string;       // "NVMe", "SATA", "USB", "Apple Fabric"
   smartSupported: boolean;
   smartStatus?: string;    // "Verified", "Failing", etc.
+  volumes: Volume[];
 }
 
 export interface SmartReport {
