@@ -71,18 +71,8 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
         console.error(`Error parsing info for ${d}`, e);
       }
     }
-  } catch(e: any) {
+  } catch(e) {
      console.error('Failed to discover disks:', e);
-     return [{
-       id: 'error',
-       bsdName: 'error',
-       displayName: 'Error: ' + String(e),
-       model: e.stack || String(e),
-       sizeBytes: 0,
-       isInternal: false,
-       transport: 'Error',
-       smartSupported: false
-     }];
   }
   return devices;
 }
