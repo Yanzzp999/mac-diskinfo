@@ -3,6 +3,7 @@ import type { DiskDevice, SmartReport } from './shared/types';
 import { DiskCard } from './components/DiskCard';
 import { SmartDetail } from './components/SmartDetail';
 import { HardDrive, RefreshCw } from 'lucide-react';
+import appIcon from './assets/app-icon.png';
 
 function App() {
   const [devices, setDevices] = useState<DiskDevice[]>([]);
@@ -58,12 +59,10 @@ function App() {
       <header className="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-white/5 shadow-sm z-10">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-              <HardDrive className="w-4.5 h-4.5" />
-            </div>
+            <img src={appIcon} alt="DiskSight" className="w-9 h-9 rounded-lg shadow-lg" />
             <div>
               <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                DiskInfo
+                DiskSight
               </h1>
               <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Smart Health Monitor</p>
             </div>

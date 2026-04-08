@@ -7,7 +7,7 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
-    title: "DiskInfo - SMART Monitor",
+    title: "DiskSight",
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
