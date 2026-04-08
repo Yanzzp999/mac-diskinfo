@@ -1,73 +1,57 @@
-# React + TypeScript + Vite
+# DiskSight
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个面向 macOS 的轻量磁盘信息与 SMART 健康查看工具，使用 Electron + React 构建，适合快速查看内置盘和外接盘的基础状态。
 
-Currently, two official plugins are available:
+## 功能
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 扫描 macOS 上的磁盘设备
+- 展示型号、容量、协议、卷信息和挂载点
+- 读取并展示 SMART 基本健康数据
+- 区分“设备已识别”和“SMART 可读取”
+- 提供简洁的磁盘列表与详情视图
 
-## React Compiler
+## 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Electron
+- React + TypeScript + Vite
+- Tailwind CSS
+- `diskutil` / `system_profiler` / `smartctl`
 
-## Expanding the ESLint configuration
+## 环境要求
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- macOS
+- Node.js 18+
+- 已安装 `smartctl`
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+推荐使用 Homebrew 安装：
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+brew install smartmontools
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 本地开发
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+## 打包
+
+```bash
+npm run build
+```
+
+构建产物默认输出到 `release/` 目录。
+
+## 注意事项
+
+- 部分 USB / NVMe 外接盒不一定完整支持 SMART
+- 某些磁盘在当前权限下可能无法读取 SMART 详情
+- 当前项目主要面向 macOS 场景
+
+## Roadmap
+
+- 优化外接盘兼容性
+- 展示更多原始 SMART 指标
+- 支持导出诊断信息
