@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react';
-import type { DiskDevice } from './shared/types';
+import type { DiskDevice, SmartReport } from './shared/types';
 import { DiskCard } from './components/DiskCard';
-import { HardDrive } from 'lucide-react';
+import { SmartDetail } from './components/SmartDetail';
+import { HardDrive, RefreshCw } from 'lucide-react';
 
 function App() {
   const [devices, setDevices] = useState<DiskDevice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reports, setReports] = useState<Record<string, SmartReport>>({});
+  const [reportLoading, setReportLoading] = useState(false);
 
   const loadDisks = async () => {
     setLoading(true);
     try {
       const data = await window.electron.scanDisks();
       setDevices(data);
+      // Auto-select first disk
+      if (data.length > 0 && !selectedId) {
+        setSelectedId(data[0].id);
+      }
     } catch (error) {
       console.error('Failed to load disks:', error);
     } finally {
@@ -19,58 +27,104 @@ function App() {
     }
   };
 
+  const loadSmartReport = async (diskId: string) => {
+    if (reports[diskId]) return; // Already cached
+    setReportLoading(true);
+    try {
+      const data = await window.electron.getSmartReport(diskId);
+      setReports(prev => ({ ...prev, [diskId]: data }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadDisks();
   }, []);
 
+  useEffect(() => {
+    if (selectedId) {
+      loadSmartReport(selectedId);
+    }
+  }, [selectedId]);
+
+  const selectedDevice = devices.find(d => d.id === selectedId);
+
   return (
-    <div className="min-h-screen bg-background text-slate-200">
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-white/5 shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-              <HardDrive className="w-5 h-5" />
+    <div className="h-screen flex flex-col bg-background text-slate-200 overflow-hidden">
+      {/* Header */}
+      <header className="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-white/5 shadow-sm z-10">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+              <HardDrive className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+              <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
                 DiskInfo
               </h1>
-              <p className="text-xs text-slate-500 font-medium tracking-wide">SMART HEALTH MONITOR</p>
+              <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Smart Health Monitor</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={loadDisks}
             disabled={loading}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+            title="Refresh"
           >
-            {loading ? 'Scanning...' : 'Refresh'}
+            <RefreshCw className={`w-4 h-4 text-slate-400 group-hover:text-white transition-colors ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2].map(i => (
-              <div key={i} className="h-28 bg-surface/50 rounded-2xl border border-white/5 animate-pulse"></div>
-            ))}
-          </div>
-        ) : devices.length > 0 ? (
-          <div className="space-y-6">
-            {devices.map(device => (
-              <DiskCard key={device.id} device={device} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 mx-auto bg-white/5 rounded-2xl flex items-center justify-center mb-6">
-              <HardDrive className="w-10 h-10 text-slate-500" />
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar — Disk List */}
+        <aside className="w-72 flex-shrink-0 border-r border-white/5 bg-surface/30 overflow-y-auto p-3 space-y-1">
+          {loading ? (
+            <div className="space-y-2 p-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-16 bg-white/5 rounded-xl animate-pulse"></div>
+              ))}
             </div>
-            <h2 className="text-xl font-semibold text-slate-300 mb-2">No Disks Found</h2>
-            <p className="text-slate-500">Could not discover any compatible disks on this system.</p>
-          </div>
-        )}
-      </main>
+          ) : devices.length > 0 ? (
+            devices.map(device => (
+              <DiskCard
+                key={device.id}
+                device={device}
+                selected={device.id === selectedId}
+                onClick={() => setSelectedId(device.id)}
+              />
+            ))
+          ) : (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              <HardDrive className="w-8 h-8 mx-auto mb-3 opacity-30" />
+              <p>No disks found</p>
+            </div>
+          )}
+        </aside>
+
+        {/* Right Panel — Detail View */}
+        <main className="flex-1 overflow-hidden bg-background">
+          {selectedDevice ? (
+            <SmartDetail
+              device={selectedDevice}
+              report={reports[selectedId!] || null}
+              loading={reportLoading && !reports[selectedId!]}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-500">
+              <div className="text-center">
+                <HardDrive className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                <p className="text-lg font-medium">Select a disk</p>
+                <p className="text-sm mt-1">Choose a disk from the sidebar to view SMART details</p>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
