@@ -6,16 +6,12 @@ interface MetricCardProps {
 
 export function MetricCard({ label, value, icon }: MetricCardProps) {
   return (
-    <div className="bg-surface hover:bg-surface-hover/50 transition-colors duration-200 rounded-xl p-4 border border-white/5 flex items-center space-x-4 group">
-      {icon && (
-        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500/20 transition-colors">
-          {icon}
-        </div>
-      )}
-      <div className="flex flex-col">
-        <span className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">{label}</span>
-        <span className="text-lg font-semibold text-slate-100">{value}</span>
+    <div className="bg-white/[0.02] hover:bg-white/[0.06] border border-white/5 transition-colors rounded-md py-2 px-3 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        {icon && <div className="text-blue-400 [&>svg]:w-4 [&>svg]:h-4">{icon}</div>}
+        <span className="text-[13px] text-slate-400">{label}</span>
       </div>
+      <span className="text-[13px] font-medium text-slate-200 font-mono">{value}</span>
     </div>
   );
 }

@@ -12,11 +12,14 @@ function App() {
   const [reports, setReports] = useState<Record<string, SmartReport>>({});
   const [reportLoading, setReportLoading] = useState(false);
 
-  const loadDisks = async () => {
+  const loadDisks = async (isManualRefresh = false) => {
     setLoading(true);
     try {
       const data = await window.electron.scanDisks();
       setDevices(data);
+      if (isManualRefresh) {
+        setReports({}); // clear cached reports so they get re-fetched and errors reappear
+      }
       // Auto-select first disk
       if (data.length > 0 && !selectedId) {
         setSelectedId(data[0].id);
@@ -68,7 +71,7 @@ function App() {
             </div>
           </div>
           <button
-            onClick={loadDisks}
+            onClick={() => loadDisks(true)}
             disabled={loading}
             className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
             title="Refresh"

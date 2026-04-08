@@ -13,7 +13,8 @@
   "dependencies": {
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -40,7 +41,8 @@
   "build": {
     "appId": "com.mac-diskinfo.app",
     "mac": {
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "icon": "public/icon.png"
     },
     "directories": {
       "output": "release"

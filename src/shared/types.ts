@@ -17,6 +17,7 @@ export interface DiskDevice {
   isInternal: boolean;
   isSolidState?: boolean;
   transport: string;       // "NVMe", "SATA", "USB", "Apple Fabric"
+  linkSpeed?: string;      // e.g. "Thunderbolt 4 · 40 Gb/s", "USB 5 Gb/s"
   smartSupported: boolean;
   smartStatus?: string;    // "Verified", "Failing", etc.
   volumes: Volume[];
@@ -39,11 +40,23 @@ export interface SmartReport {
   failureReason?: string;
 }
 
+export interface DiskSpeedData {
+  bsdName: string;
+  readSpeedBytes: number;
+  writeSpeedBytes: number;
+  timestamp: number;
+}
+
 declare global {
   interface Window {
     electron: {
       scanDisks: () => Promise<DiskDevice[]>;
       getSmartReport: (diskId: string) => Promise<SmartReport>;
+      getTemperature: (diskId: string) => Promise<number | null>;
+      startDiskSpeedMonitor: (bsdName: string) => void;
+      stopDiskSpeedMonitor: (bsdName: string) => void;
+      onDiskSpeedUpdate: (callback: (data: DiskSpeedData) => void) => void;
+      removeDiskSpeedUpdateListener: () => void;
     }
   }
 }

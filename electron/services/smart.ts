@@ -69,3 +69,29 @@ function parseSmartData(data: any, report: SmartReport) {
     report.readable = true;
   }
 }
+
+export async function getTemperature(diskId: string): Promise<number | null> {
+  try {
+    const { stdout } = await execAsync(`smartctl -a /dev/${diskId} --json`);
+    const data = JSON.parse(stdout);
+    if (data.nvme_smart_health_information_log?.temperature !== undefined) {
+      return data.nvme_smart_health_information_log.temperature;
+    }
+    if (data.temperature?.current !== undefined) {
+      return data.temperature.current;
+    }
+  } catch (error: any) {
+    if (error.stdout) {
+      try {
+        const data = JSON.parse(error.stdout);
+        if (data.nvme_smart_health_information_log?.temperature !== undefined) {
+          return data.nvme_smart_health_information_log.temperature;
+        }
+        if (data.temperature?.current !== undefined) {
+          return data.temperature.current;
+        }
+      } catch (_) {}
+    }
+  }
+  return null;
+}
