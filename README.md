@@ -20,7 +20,7 @@
 ## 环境要求
 
 - macOS
-- Node.js 18+
+- Node.js 24+
 - 已安装 `smartctl`
 
 推荐使用 Homebrew 安装：

@@ -1,8 +1,8 @@
 import type { DiskDevice } from '../shared/types';
 import { StatusBadge } from './StatusBadge';
-import hddImg from '../assets/hdd.png';
-import ssdImg from '../assets/ssd.png';
-import nvmeImg from '../assets/nvme.png';
+import hddImg from '../assets/hdd-flat.svg';
+import ssdImg from '../assets/ssd-flat.svg';
+import nvmeImg from '../assets/nvme-flat.svg';
 
 interface DiskCardProps {
   device: DiskDevice;
@@ -33,7 +33,7 @@ export function DiskCard({ device, selected, onClick }: DiskCardProps) {
         }`}
     >
       <div className="flex-shrink-0 w-12 h-12 rounded-lg border border-white/10 overflow-hidden bg-[#1e293b] shadow-sm">
-        <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-cover select-none" />
+        <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-contain select-none" />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className={`text-sm font-semibold truncate ${selected ? 'text-white' : 'text-slate-200'}`}>

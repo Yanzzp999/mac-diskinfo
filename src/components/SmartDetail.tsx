@@ -1,12 +1,11 @@
-import type { SmartReport } from '../shared/types';
-import type { DiskDevice } from '../shared/types';
+import type { DiskDevice, DiskSpeedData, SmartReport } from '../shared/types';
 import { MetricCard } from './MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { Thermometer, Activity, Clock, AlertTriangle, Database, Zap, HeartPulse, HardDrive, Shield, TriangleAlert, X, Cable } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import hddImg from '../assets/hdd.png';
-import ssdImg from '../assets/ssd.png';
-import nvmeImg from '../assets/nvme.png';
+import hddImg from '../assets/hdd-flat.svg';
+import ssdImg from '../assets/ssd-flat.svg';
+import nvmeImg from '../assets/nvme-flat.svg';
 import { useState, useEffect, useRef } from 'react';
 
 interface SmartDetailProps {
@@ -15,11 +14,58 @@ interface SmartDetailProps {
   loading: boolean;
 }
 
+interface SpeedSample {
+  timestamp: number;
+  readSpeed: number;
+  writeSpeed: number;
+  readEma: number;
+  writeEma: number;
+}
+
+const SPEED_SAMPLE_MS = 2_000;
+const SPEED_WINDOW_MS = 60_000;
+const SPEED_WINDOW_SECONDS = SPEED_WINDOW_MS / 1_000;
+const EMA_ALPHA = 0.35;
+const INITIAL_Y_AXIS_MAX_MB = 8;
+const MIN_Y_AXIS_MAX_MB = 1;
+const Y_AXIS_PADDING = 1.15;
+const Y_AXIS_DECAY_THRESHOLD = 0.7;
+const Y_AXIS_DECAY_FACTOR = 0.88;
+
+function formatRate(valueMB: number) {
+  if (valueMB >= 1024) return `${(valueMB / 1024).toFixed(valueMB >= 10_240 ? 0 : 1)} GB/s`;
+  if (valueMB >= 1) return `${valueMB.toFixed(valueMB >= 10 ? 0 : 1)} MB/s`;
+
+  const valueKB = valueMB * 1024;
+  if (valueKB >= 1) return `${valueKB.toFixed(valueKB >= 10 ? 0 : 1)} KB/s`;
+
+  return `${Math.round(valueKB * 1024)} B/s`;
+}
+
+function formatTimeLabel(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour12: false,
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function clampAxisMax(valueMB: number) {
+  const nextValue = Math.max(valueMB, MIN_Y_AXIS_MAX_MB);
+
+  if (nextValue >= 100) return Math.ceil(nextValue / 10) * 10;
+  if (nextValue >= 10) return Math.ceil(nextValue);
+  if (nextValue >= 1) return Math.ceil(nextValue * 2) / 2;
+  return Math.ceil(nextValue * 10) / 10;
+}
+
 export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [speedHistory, setSpeedHistory] = useState<{time: string, readSpeed: number, writeSpeed: number}[]>([]);
+  const [speedHistory, setSpeedHistory] = useState<SpeedSample[]>([]);
+  const [showEma, setShowEma] = useState(false);
+  const [yAxisMax, setYAxisMax] = useState(INITIAL_Y_AXIS_MAX_MB);
 
   useEffect(() => {
     setErrorDismissed(false);
@@ -59,35 +105,66 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   // Disk Speed Monitoring
   useEffect(() => {
     setSpeedHistory([]);
-    
+    setYAxisMax(INITIAL_Y_AXIS_MAX_MB);
+
     window.electron.startDiskSpeedMonitor(device.bsdName);
-    
-    const handleSpeedUpdate = (data: any) => {
+
+    const handleSpeedUpdate = (data: DiskSpeedData) => {
       if (data.bsdName !== device.bsdName) return;
-      
+
       const readMB = data.readSpeedBytes / (1024 * 1024);
       const writeMB = data.writeSpeedBytes / (1024 * 1024);
-      const timeStr = new Date(data.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      
+
       setSpeedHistory(prev => {
-        const newHistory = [...prev, { time: timeStr, readSpeed: readMB, writeSpeed: writeMB }];
-        // Keep last 30 data points (60 seconds at 2s interval)
-        if (newHistory.length > 30) {
-          return newHistory.slice(newHistory.length - 30);
-        }
-        return newHistory;
+        const previousSample = prev[prev.length - 1];
+        const nextSample: SpeedSample = {
+          timestamp: data.timestamp,
+          readSpeed: readMB,
+          writeSpeed: writeMB,
+          readEma: previousSample ? previousSample.readEma + EMA_ALPHA * (readMB - previousSample.readEma) : readMB,
+          writeEma: previousSample ? previousSample.writeEma + EMA_ALPHA * (writeMB - previousSample.writeEma) : writeMB,
+        };
+
+        const cutoff = data.timestamp - SPEED_WINDOW_MS;
+        return [...prev.filter(sample => sample.timestamp >= cutoff), nextSample];
       });
     };
-    
+
     window.electron.onDiskSpeedUpdate(handleSpeedUpdate);
-    
+
     return () => {
       window.electron.removeDiskSpeedUpdateListener();
       window.electron.stopDiskSpeedMonitor(device.bsdName);
     };
   }, [device.bsdName]);
 
+  useEffect(() => {
+    if (speedHistory.length === 0) {
+      setYAxisMax(INITIAL_Y_AXIS_MAX_MB);
+      return;
+    }
+
+    const observedMax = speedHistory.reduce(
+      (maxValue, sample) => Math.max(maxValue, sample.readSpeed, sample.writeSpeed),
+      0
+    );
+    const targetMax = clampAxisMax(observedMax * Y_AXIS_PADDING);
+
+    setYAxisMax(prev => {
+      if (targetMax > prev) return targetMax;
+      if (targetMax < prev * Y_AXIS_DECAY_THRESHOLD) {
+        return clampAxisMax(Math.max(targetMax, prev * Y_AXIS_DECAY_FACTOR));
+      }
+      return prev;
+    });
+  }, [speedHistory]);
+
   const currentTemp = liveTemp ?? report?.temperatureC;
+  const latestSample = speedHistory.length > 0 ? speedHistory[speedHistory.length - 1] : null;
+  const peakRead = speedHistory.reduce((maxValue, sample) => Math.max(maxValue, sample.readSpeed), 0);
+  const peakWrite = speedHistory.reduce((maxValue, sample) => Math.max(maxValue, sample.writeSpeed), 0);
+  const chartEnd = latestSample?.timestamp ?? Date.now();
+  const chartStart = chartEnd - SPEED_WINDOW_MS;
 
   const isNVMe = device.transport.toUpperCase().includes('NVME') || device.transport.toUpperCase().includes('FABRIC') || device.transport.toUpperCase().includes('PCI');
   const diskType = device.isSolidState === false ? 'HDD' : (isNVMe ? 'NVMe' : 'SSD');
@@ -114,7 +191,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       {/* Device Header */}
       <div className="flex items-center gap-5 pb-6 border-b border-white/10">
         <div className="flex-shrink-0 w-20 h-20 rounded-2xl border border-white/10 overflow-hidden bg-[#1e293b] shadow-lg">
-          <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-cover select-none" />
+          <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-contain select-none" />
         </div>
         <div>
           <h2 className="text-2xl font-bold text-white">{device.displayName}</h2>
@@ -178,63 +255,152 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       {/* Live Disk IO Chart */}
       {!loading && (
         <div className="pt-2">
-          <h3 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
-            <Activity className="w-3.5 h-3.5 text-pink-400" />
-            Live Transfer Rate
-          </h3>
-          <div className="relative h-64 w-full bg-[#1e293b] rounded-xl border border-white/5 p-4 pl-0">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <Activity className="w-3.5 h-3.5 text-pink-400" />
+                Live Transfer Rate
+              </h3>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wider text-slate-500">
+                <span className="px-2 py-1 rounded-full border border-white/10 bg-white/[0.03]">
+                  {SPEED_SAMPLE_MS / 1000}s samples
+                </span>
+                <span className="px-2 py-1 rounded-full border border-white/10 bg-white/[0.03]">
+                  {SPEED_WINDOW_SECONDS}s window
+                </span>
+                <span className="px-2 py-1 rounded-full border border-white/10 bg-white/[0.03]">
+                  Raw linear
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowEma(prev => !prev)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                showEma
+                  ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-200'
+                  : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
+              }`}
+            >
+              EMA {showEma ? 'On' : 'Off'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
+            <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wider text-blue-200/70">Read Now</div>
+              <div className="mt-1 text-lg font-semibold text-blue-200 font-mono">
+                {latestSample ? formatRate(latestSample.readSpeed) : 'Collecting...'}
+              </div>
+            </div>
+            <div className="rounded-xl border border-pink-500/15 bg-pink-500/5 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wider text-pink-200/70">Write Now</div>
+              <div className="mt-1 text-lg font-semibold text-pink-200 font-mono">
+                {latestSample ? formatRate(latestSample.writeSpeed) : 'Collecting...'}
+              </div>
+            </div>
+            <div className="rounded-xl border border-blue-500/10 bg-white/[0.02] px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500">Peak Read 60s</div>
+              <div className="mt-1 text-lg font-semibold text-slate-100 font-mono">{formatRate(peakRead)}</div>
+            </div>
+            <div className="rounded-xl border border-pink-500/10 bg-white/[0.02] px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500">Peak Write 60s</div>
+              <div className="mt-1 text-lg font-semibold text-slate-100 font-mono">{formatRate(peakWrite)}</div>
+            </div>
+          </div>
+
+          <div className="relative h-72 w-full bg-[#1e293b] rounded-xl border border-white/5 p-4 pl-0">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={speedHistory} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
                 <XAxis 
-                  dataKey="time" 
+                  type="number"
+                  dataKey="timestamp"
+                  scale="time"
+                  domain={[chartStart, chartEnd]}
                   stroke="#64748b" 
                   fontSize={10} 
                   tickMargin={10} 
                   minTickGap={20}
+                  tickCount={6}
+                  tickFormatter={(value) => formatTimeLabel(Number(value))}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis 
+                  domain={[0, yAxisMax]}
                   stroke="#64748b" 
                   fontSize={10} 
-                  tickFormatter={(val) => `${val.toFixed(1)} MB/s`}
+                  tickFormatter={(value) => formatRate(Number(value))}
                   axisLine={false}
                   tickLine={false}
-                  width={70}
+                  width={78}
                 />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
                   itemStyle={{ padding: '2px 0' }}
+                  labelFormatter={(label) => `${formatTimeLabel(Number(label))} · ${(SPEED_SAMPLE_MS / 1000).toFixed(0)}s avg`}
                   formatter={(value, name) => {
                     const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
-                    return [`${numericValue.toFixed(2)} MB/s`, String(name)];
+                    return [formatRate(numericValue), String(name)];
                   }}
                   labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                  cursor={{ stroke: '#475569', strokeDasharray: '4 4' }}
                 />
                 <Line 
-                  type="monotone" 
+                  type="linear" 
                   dataKey="readSpeed" 
                   name="Read" 
                   stroke="#3b82f6" 
                   strokeWidth={2} 
                   dot={false}
+                  isAnimationActive={false}
                   activeDot={{ r: 4, fill: '#3b82f6', stroke: '#0f172a' }}
                 />
                 <Line 
-                  type="monotone" 
+                  type="linear" 
                   dataKey="writeSpeed" 
                   name="Write" 
                   stroke="#ec4899" 
                   strokeWidth={2} 
                   dot={false}
+                  isAnimationActive={false}
                   activeDot={{ r: 4, fill: '#ec4899', stroke: '#0f172a' }}
                 />
+                {showEma && (
+                  <Line
+                    type="linear"
+                    dataKey="readEma"
+                    name="Read EMA"
+                    stroke="#93c5fd"
+                    strokeOpacity={0.8}
+                    strokeWidth={1.5}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                )}
+                {showEma && (
+                  <Line
+                    type="linear"
+                    dataKey="writeEma"
+                    name="Write EMA"
+                    stroke="#f9a8d4"
+                    strokeOpacity={0.8}
+                    strokeWidth={1.5}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
             {speedHistory.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500 pointer-events-none">
-                Collecting disk activity samples...
+                Collecting 2s disk activity samples...
               </div>
             )}
           </div>

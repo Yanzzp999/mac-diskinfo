@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "concurrently -k \"vite\" \"npm run build:electron && electron .\"",
     "build": "tsc -b && vite build && npm run build:electron && electron-builder",

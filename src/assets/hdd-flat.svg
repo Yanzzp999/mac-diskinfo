@@ -1,0 +1,58 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hdd-flat-tile" x1="184" y1="160" x2="840" y2="864" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset="1" stop-color="#D9E3F1"/>
+    </linearGradient>
+    <linearGradient id="hdd-flat-case" x1="294" y1="266" x2="738" y2="770" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FAFF"/>
+      <stop offset="1" stop-color="#C2CCD9"/>
+    </linearGradient>
+    <linearGradient id="hdd-flat-platter" x1="364" y1="314" x2="670" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FEFFFF"/>
+      <stop offset="1" stop-color="#B7C3D2"/>
+    </linearGradient>
+    <linearGradient id="hdd-flat-arm" x1="562" y1="548" x2="744" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5F6F81"/>
+      <stop offset="1" stop-color="#2B3644"/>
+    </linearGradient>
+    <linearGradient id="hdd-flat-accent" x1="596" y1="556" x2="706" y2="666" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78C7FF"/>
+      <stop offset="1" stop-color="#377DFF"/>
+    </linearGradient>
+    <filter id="hdd-flat-shadow" x="104" y="120" width="816" height="816" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="26"/>
+      <feGaussianBlur stdDeviation="24"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0204 0 0 0 0 0.0941 0 0 0 0 0.2118 0 0 0 0.2 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+  <g filter="url(#hdd-flat-shadow)">
+    <rect x="160" y="136" width="704" height="704" rx="188" fill="url(#hdd-flat-tile)"/>
+    <rect x="160" y="136" width="704" height="704" rx="188" stroke="white" stroke-opacity="0.62" stroke-width="12"/>
+    <circle cx="346" cy="270" r="138" fill="#7AC2FF" fill-opacity="0.12"/>
+    <path d="M754 220C706 172 626 144 540 144H292V376C292 424 330 462 378 462H616C718 462 800 380 800 278V238C800 231 797 225 792 220H754Z" fill="white" fill-opacity="0.22"/>
+  </g>
+  <rect x="262" y="248" width="500" height="528" rx="108" fill="url(#hdd-flat-case)"/>
+  <rect x="262" y="248" width="500" height="528" rx="108" stroke="#FFFFFF" stroke-opacity="0.72" stroke-width="10"/>
+  <circle cx="512" cy="482" r="170" fill="url(#hdd-flat-platter)"/>
+  <circle cx="512" cy="482" r="170" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="8"/>
+  <circle cx="512" cy="482" r="56" fill="#DCE6F2"/>
+  <circle cx="512" cy="482" r="24" fill="#8091A3"/>
+  <circle cx="512" cy="482" r="10" fill="#425163"/>
+  <path d="M596 608C614 580 640 560 670 548L710 640C682 652 658 672 642 700L596 608Z" fill="url(#hdd-flat-arm)"/>
+  <path d="M640 700C640 680 646 662 658 648L722 714C704 728 682 736 658 736H644C642 736 640 734 640 732V700Z" fill="url(#hdd-flat-arm)"/>
+  <circle cx="602" cy="614" r="34" fill="#D8E2EE"/>
+  <circle cx="602" cy="614" r="12" fill="#536477"/>
+  <circle cx="702" cy="646" r="18" fill="url(#hdd-flat-accent)"/>
+  <circle cx="702" cy="646" r="8" fill="white" fill-opacity="0.9"/>
+  <circle cx="316" cy="302" r="10" fill="#95A4B7"/>
+  <circle cx="708" cy="302" r="10" fill="#95A4B7"/>
+  <circle cx="316" cy="722" r="10" fill="#95A4B7"/>
+  <circle cx="708" cy="722" r="10" fill="#95A4B7"/>
+  <path d="M350 662H506" stroke="#A5B4C5" stroke-width="20" stroke-linecap="round"/>
+  <path d="M350 704H458" stroke="#B9C6D4" stroke-width="20" stroke-linecap="round"/>
+</svg>
