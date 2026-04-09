@@ -55,8 +55,7 @@ declare global {
       getTemperature: (diskId: string) => Promise<number | null>;
       startDiskSpeedMonitor: (bsdName: string) => void;
       stopDiskSpeedMonitor: (bsdName: string) => void;
-      onDiskSpeedUpdate: (callback: (data: DiskSpeedData) => void) => void;
-      removeDiskSpeedUpdateListener: () => void;
+      onDiskSpeedUpdate: (callback: (data: DiskSpeedData) => void) => () => void;
     }
   }
 }

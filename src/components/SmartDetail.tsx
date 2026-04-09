@@ -107,8 +107,6 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
     setSpeedHistory([]);
     setYAxisMax(INITIAL_Y_AXIS_MAX_MB);
 
-    window.electron.startDiskSpeedMonitor(device.bsdName);
-
     const handleSpeedUpdate = (data: DiskSpeedData) => {
       if (data.bsdName !== device.bsdName) return;
 
@@ -130,10 +128,11 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       });
     };
 
-    window.electron.onDiskSpeedUpdate(handleSpeedUpdate);
+    const unsubscribe = window.electron.onDiskSpeedUpdate(handleSpeedUpdate);
+    window.electron.startDiskSpeedMonitor(device.bsdName);
 
     return () => {
-      window.electron.removeDiskSpeedUpdateListener();
+      unsubscribe();
       window.electron.stopDiskSpeedMonitor(device.bsdName);
     };
   }, [device.bsdName]);

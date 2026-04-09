@@ -1,8 +1,137 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  webContents,
+  type Event,
+  type RenderProcessGoneDetails,
+  type WebContents,
+  type WebContentsDidStartNavigationEventParams,
+} from 'electron';
 import * as path from 'path';
 import { discoverDisks } from './services/discovery';
 import { getSmartReport, getTemperature } from './services/smart';
-import { startIoMonitor, stopIoMonitor } from './services/iostat';
+import { createIoMonitor, type IoMonitorSession } from './services/iostat';
+
+interface ActiveDiskSpeedMonitor {
+  bsdName: string;
+  session: IoMonitorSession;
+}
+
+interface RendererMonitorContext {
+  activeMonitor: ActiveDiskSpeedMonitor | null;
+  teardown: () => void;
+}
+
+const diskSpeedMonitorContexts = new Map<number, RendererMonitorContext>();
+
+function teardownRendererMonitorContext(senderId: number) {
+  const context = diskSpeedMonitorContexts.get(senderId);
+  if (!context || context.activeMonitor) return;
+
+  context.teardown();
+  diskSpeedMonitorContexts.delete(senderId);
+}
+
+function stopActiveDiskSpeedMonitor(senderId: number) {
+  const context = diskSpeedMonitorContexts.get(senderId);
+  if (!context?.activeMonitor) {
+    teardownRendererMonitorContext(senderId);
+    return;
+  }
+
+  context.activeMonitor.session.stop();
+  context.activeMonitor = null;
+  teardownRendererMonitorContext(senderId);
+}
+
+function stopMatchingDiskSpeedMonitor(senderId: number, bsdName: string) {
+  const context = diskSpeedMonitorContexts.get(senderId);
+  if (!context?.activeMonitor) {
+    teardownRendererMonitorContext(senderId);
+    return;
+  }
+
+  if (context.activeMonitor.bsdName !== bsdName) return;
+
+  context.activeMonitor.session.stop();
+  context.activeMonitor = null;
+  teardownRendererMonitorContext(senderId);
+}
+
+function getOrCreateRendererMonitorContext(contents: WebContents) {
+  const senderId = contents.id;
+  const existingContext = diskSpeedMonitorContexts.get(senderId);
+  if (existingContext) return existingContext;
+
+  const handleDestroyed = () => {
+    stopActiveDiskSpeedMonitor(senderId);
+  };
+
+  const handleRenderProcessGone = (
+    event: Event,
+    details: RenderProcessGoneDetails
+  ) => {
+    void event;
+    console.warn(`[disk-speed-monitor] renderer ${senderId} exited: ${details.reason}`);
+    stopActiveDiskSpeedMonitor(senderId);
+  };
+
+  const handleDidStartNavigation = (
+    details: Event<WebContentsDidStartNavigationEventParams>
+  ) => {
+    if (!details.isMainFrame || details.isSameDocument) return;
+    stopActiveDiskSpeedMonitor(senderId);
+  };
+
+  contents.on('destroyed', handleDestroyed);
+  contents.on('render-process-gone', handleRenderProcessGone);
+  contents.on('did-start-navigation', handleDidStartNavigation);
+
+  const context: RendererMonitorContext = {
+    activeMonitor: null,
+    teardown: () => {
+      contents.removeListener('destroyed', handleDestroyed);
+      contents.removeListener('render-process-gone', handleRenderProcessGone);
+      contents.removeListener('did-start-navigation', handleDidStartNavigation);
+    },
+  };
+
+  diskSpeedMonitorContexts.set(senderId, context);
+  return context;
+}
+
+function startDiskSpeedMonitor(contents: WebContents, bsdName: string) {
+  const senderId = contents.id;
+
+  // The renderer exposes one disk-speed stream at a time, so replace any
+  // existing monitor before starting a fresh session for the selected disk.
+  stopActiveDiskSpeedMonitor(senderId);
+  const context = getOrCreateRendererMonitorContext(contents);
+
+  const session = createIoMonitor(bsdName, 2000, {
+    onData: (data) => {
+      const targetContents = webContents.fromId(senderId);
+      if (!targetContents || targetContents.isDestroyed()) {
+        stopActiveDiskSpeedMonitor(senderId);
+        return;
+      }
+
+      try {
+        targetContents.send('disk-speed-update', data);
+      } catch (error) {
+        console.warn(`[disk-speed-monitor] failed to deliver update for ${bsdName} to renderer ${senderId}:`, error);
+        stopActiveDiskSpeedMonitor(senderId);
+      }
+    },
+    onError: (error) => {
+      console.warn(`[disk-speed-monitor] monitor failed for ${bsdName} on renderer ${senderId}:`, error);
+      stopActiveDiskSpeedMonitor(senderId);
+    },
+  });
+
+  context.activeMonitor = { bsdName, session };
+}
 
 function createWindow() {
   const iconPath = app.isPackaged
@@ -51,14 +180,11 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('start-disk-speed-monitor', (event, bsdName) => {
-    startIoMonitor(bsdName, 2000, (data) => {
-      // Send data back to the window that requested it
-      event.sender.send('disk-speed-update', data);
-    });
+    startDiskSpeedMonitor(event.sender, bsdName);
   });
 
   ipcMain.on('stop-disk-speed-monitor', (event, bsdName) => {
-    stopIoMonitor(bsdName);
+    stopMatchingDiskSpeedMonitor(event.sender.id, bsdName);
   });
 
   createWindow();
@@ -66,6 +192,12 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('before-quit', () => {
+  for (const senderId of Array.from(diskSpeedMonitorContexts.keys())) {
+    stopActiveDiskSpeedMonitor(senderId);
+  }
 });
 
 app.on('window-all-closed', function () {

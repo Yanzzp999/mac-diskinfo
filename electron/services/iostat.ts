@@ -16,9 +16,14 @@ interface LastStats {
   timestamp: number;
 }
 
-const activeMonitors = new Map<string, NodeJS.Timeout>();
-const lastStatsMap = new Map<string, LastStats>();
-const monitorTokens = new Map<string, symbol>();
+interface IoMonitorHandlers {
+  onData: (data: DiskSpeedData) => void;
+  onError?: (error: unknown) => void;
+}
+
+export interface IoMonitorSession {
+  stop: () => void;
+}
 
 /**
  * Reads cumulative byte counters from IOBlockStorageDriver.
@@ -74,40 +79,55 @@ async function getDiskStats(bsdName: string): Promise<{ bytesRead: number, bytes
   return null;
 }
 
-export function startIoMonitor(
+export function createIoMonitor(
   bsdName: string,
   intervalMs: number,
-  callback: (data: DiskSpeedData) => void
-) {
-  // If already tracking, clear the old one
-  if (activeMonitors.has(bsdName)) {
-    stopIoMonitor(bsdName);
-  }
-
-  const token = Symbol(bsdName);
-  monitorTokens.set(bsdName, token);
+  handlers: IoMonitorHandlers
+): IoMonitorSession {
+  let timer: NodeJS.Timeout | null = null;
+  let lastStats: LastStats | null = null;
+  let stopped = false;
 
   let isPolling = false;
 
+  const stop = () => {
+    stopped = true;
+    lastStats = null;
+
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+
+  const reportError = (error: unknown) => {
+    if (!handlers.onError) return;
+
+    try {
+      handlers.onError(error);
+    } catch (reportingError) {
+      console.warn('[disk-speed-monitor] error handler failed:', reportingError);
+    }
+  };
+
   const pollStats = async () => {
-    if (isPolling) return;
+    if (stopped || isPolling) return;
     isPolling = true;
 
     try {
       const stats = await getDiskStats(bsdName);
-      if (!stats || monitorTokens.get(bsdName) !== token) return;
+      if (!stats || stopped) return;
 
       const now = Date.now();
-      const lastStats = lastStatsMap.get(bsdName);
 
       // Prime the monitor with the first cumulative sample and wait for
       // the next interval before emitting a real 2s average.
       if (!lastStats) {
-        lastStatsMap.set(bsdName, {
+        lastStats = {
           bytesRead: stats.bytesRead,
           bytesWritten: stats.bytesWritten,
           timestamp: now
-        });
+        };
         return;
       }
 
@@ -124,18 +144,21 @@ export function startIoMonitor(
         writeSpeedBytes = writeDiff >= 0 ? Math.round(writeDiff / timeDiffSec) : 0;
       }
 
-      lastStatsMap.set(bsdName, {
+      lastStats = {
         bytesRead: stats.bytesRead,
         bytesWritten: stats.bytesWritten,
         timestamp: now
-      });
+      };
 
-      callback({
+      handlers.onData({
         bsdName,
         readSpeedBytes,
         writeSpeedBytes,
         timestamp: now
       });
+    } catch (error) {
+      stop();
+      reportError(error);
     } finally {
       isPolling = false;
     }
@@ -143,19 +166,9 @@ export function startIoMonitor(
 
   void pollStats();
 
-  const timer = setInterval(() => {
+  timer = setInterval(() => {
     void pollStats();
   }, intervalMs);
 
-  activeMonitors.set(bsdName, timer);
-}
-
-export function stopIoMonitor(bsdName: string) {
-  const timer = activeMonitors.get(bsdName);
-  if (timer) {
-    clearInterval(timer);
-    activeMonitors.delete(bsdName);
-  }
-  monitorTokens.delete(bsdName);
-  lastStatsMap.delete(bsdName);
+  return { stop };
 }
