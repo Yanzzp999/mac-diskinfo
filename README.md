@@ -10,6 +10,16 @@
 - 区分“设备已识别”和“SMART 可读取”
 - 提供简洁的磁盘列表与详情视图
 
+## 界面示意
+
+### 总览页面
+
+![DiskSight 总览页面](docs/images/overview.png)
+
+### 外接 NVMe 设备详情
+
+![DiskSight 外接 NVMe 设备详情](docs/images/external-ssd.png)
+
 ## 技术栈
 
 - Electron
