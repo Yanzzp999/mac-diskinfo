@@ -1,4 +1,4 @@
-import type { DiskDevice, DiskSpeedData, SmartReport } from '../shared/types';
+import type { DiskDevice, DiskSpeedData, SmartAttribute, SmartReport } from '../shared/types';
 import { MetricCard } from './MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { Thermometer, Activity, Clock, AlertTriangle, Database, Zap, HeartPulse, HardDrive, Shield, TriangleAlert, X, Cable } from 'lucide-react';
@@ -22,6 +22,8 @@ interface SpeedSample {
   writeEma: number;
 }
 
+const speedHistoryCache = new Map<string, SpeedSample[]>();
+
 const SPEED_SAMPLE_MS = 2_000;
 const SPEED_WINDOW_MS = 60_000;
 const SPEED_WINDOW_SECONDS = SPEED_WINDOW_MS / 1_000;
@@ -29,8 +31,6 @@ const EMA_ALPHA = 0.35;
 const INITIAL_Y_AXIS_MAX_MB = 8;
 const MIN_Y_AXIS_MAX_MB = 1;
 const Y_AXIS_PADDING = 1.15;
-const Y_AXIS_DECAY_THRESHOLD = 0.7;
-const Y_AXIS_DECAY_FACTOR = 0.88;
 
 function formatRate(valueMB: number) {
   if (valueMB >= 1024) return `${(valueMB / 1024).toFixed(valueMB >= 10_240 ? 0 : 1)} GB/s`;
@@ -59,17 +59,115 @@ function clampAxisMax(valueMB: number) {
   return Math.ceil(nextValue * 10) / 10;
 }
 
+function getCachedSpeedHistory(bsdName: string) {
+  const cutoff = Date.now() - SPEED_WINDOW_MS;
+  const cached = speedHistoryCache.get(bsdName) ?? [];
+  const filtered = cached.filter((sample) => sample.timestamp >= cutoff);
+
+  if (filtered.length !== cached.length) {
+    if (filtered.length > 0) {
+      speedHistoryCache.set(bsdName, filtered);
+    } else {
+      speedHistoryCache.delete(bsdName);
+    }
+  }
+
+  return filtered;
+}
+
+function getSmartHints(device: DiskDevice) {
+  return {
+    transport: device.transport,
+    isInternal: device.isInternal,
+    bridgeChip: device.bridgeChip,
+    connectionPath: device.connectionPath,
+  };
+}
+
+function formatBlockSize(bytes?: number) {
+  if (bytes === undefined) return 'N/A';
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(bytes % 1024 === 0 ? 0 : 1)} KB`;
+  return `${bytes} B`;
+}
+
+function formatAttributeName(name: string) {
+  return name.replace(/_/g, ' ');
+}
+
+function getAtaHealthAssessment(report: SmartReport) {
+  if (report.healthPassed === false) {
+    return {
+      label: 'Bad',
+      accentClass: 'text-[#ff453a]',
+      panelClass: 'border-[#ff453a]/20 bg-[#ff453a]/8',
+      summary: 'SMART self-assessment failed. Back up this drive as soon as possible.',
+    };
+  }
+
+  const cautionReasons: string[] = [];
+  if ((report.reallocatedSectors ?? 0) > 0) cautionReasons.push('reallocated sectors');
+  if ((report.currentPendingSectors ?? 0) > 0) cautionReasons.push('pending sectors');
+  if ((report.offlineUncorrectable ?? 0) > 0) cautionReasons.push('uncorrectable sectors');
+
+  if (cautionReasons.length > 0) {
+    return {
+      label: 'Caution',
+      accentClass: 'text-[#ff9f0a]',
+      panelClass: 'border-[#ff9f0a]/20 bg-[#ff9f0a]/8',
+      summary: `Surface warning: ${cautionReasons.join(', ')} detected.`,
+    };
+  }
+
+  if ((report.udmaCrcErrors ?? 0) > 0) {
+    return {
+      label: 'Attention',
+      accentClass: 'text-[#64d2ff]',
+      panelClass: 'border-[#64d2ff]/20 bg-[#64d2ff]/8',
+      summary: 'Disk surface looks healthy, but the link has recorded CRC/interface errors.',
+    };
+  }
+
+  return {
+    label: 'Good',
+    accentClass: 'text-[#32d74b]',
+    panelClass: 'border-[#32d74b]/20 bg-[#32d74b]/8',
+    summary: 'No critical HDD SMART warning attributes are currently elevated.',
+  };
+}
+
+function getAtaHighlightAttributes(report: SmartReport) {
+  const highlightIds = new Set([5, 9, 10, 12, 193, 194, 196, 197, 198, 199]);
+  return (report.rawAttributes ?? [])
+    .filter((attribute) => highlightIds.has(attribute.id))
+    .sort((left, right) => left.id - right.id);
+}
+
 export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
+  const [isWindowFocused, setIsWindowFocused] = useState(() => document.hasFocus());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [speedHistory, setSpeedHistory] = useState<SpeedSample[]>([]);
+  const [speedHistory, setSpeedHistory] = useState<SpeedSample[]>(() => getCachedSpeedHistory(device.bsdName));
   const [showEma, setShowEma] = useState(false);
-  const [yAxisMax, setYAxisMax] = useState(INITIAL_Y_AXIS_MAX_MB);
+  const [chartSeedTime] = useState(() => Date.now());
 
   useEffect(() => {
-    setErrorDismissed(false);
-  }, [device.id, loading]);
+    const handleFocus = () => {
+      setIsWindowFocused(true);
+    };
+
+    const handleBlur = () => {
+      setIsWindowFocused(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   // Poll temperature every 5s for SMART-capable disks
   useEffect(() => {
@@ -78,21 +176,24 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    setLiveTemp(null);
 
-    // Only poll if the report is readable (SMART supported)
-    if (!report?.readable) return;
+    // Only poll if the report is readable and the window is active.
+    if (!report?.readable || !isWindowFocused) return;
 
-    const fetchTemp = async () => {
+    const fetchTemperature = async () => {
       try {
-        const temp = await window.electron.getTemperature(device.id);
+        const temp = await window.electron.getTemperature(device.id, getSmartHints(device));
         if (temp !== null) setLiveTemp(temp);
-      } catch (_) {}
+      } catch {
+        // Ignore transient SMART polling failures.
+      }
     };
 
     // Start polling
-    fetchTemp();
-    intervalRef.current = setInterval(fetchTemp, 5000);
+    void fetchTemperature();
+    intervalRef.current = setInterval(() => {
+      void fetchTemperature();
+    }, 5000);
 
     return () => {
       if (intervalRef.current) {
@@ -100,13 +201,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
         intervalRef.current = null;
       }
     };
-  }, [device.id, report?.readable]);
+  }, [device, isWindowFocused, report?.readable]);
 
   // Disk Speed Monitoring
   useEffect(() => {
-    setSpeedHistory([]);
-    setYAxisMax(INITIAL_Y_AXIS_MAX_MB);
-
     const handleSpeedUpdate = (data: DiskSpeedData) => {
       if (data.bsdName !== device.bsdName) return;
 
@@ -124,7 +222,9 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
         };
 
         const cutoff = data.timestamp - SPEED_WINDOW_MS;
-        return [...prev.filter(sample => sample.timestamp >= cutoff), nextSample];
+        const nextHistory = [...prev.filter(sample => sample.timestamp >= cutoff), nextSample];
+        speedHistoryCache.set(device.bsdName, nextHistory);
+        return nextHistory;
       });
     };
 
@@ -137,36 +237,25 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
     };
   }, [device.bsdName]);
 
-  useEffect(() => {
-    if (speedHistory.length === 0) {
-      setYAxisMax(INITIAL_Y_AXIS_MAX_MB);
-      return;
-    }
-
-    const observedMax = speedHistory.reduce(
-      (maxValue, sample) => Math.max(maxValue, sample.readSpeed, sample.writeSpeed),
-      0
-    );
-    const targetMax = clampAxisMax(observedMax * Y_AXIS_PADDING);
-
-    setYAxisMax(prev => {
-      if (targetMax > prev) return targetMax;
-      if (targetMax < prev * Y_AXIS_DECAY_THRESHOLD) {
-        return clampAxisMax(Math.max(targetMax, prev * Y_AXIS_DECAY_FACTOR));
-      }
-      return prev;
-    });
-  }, [speedHistory]);
-
   const currentTemp = liveTemp ?? report?.temperatureC;
   const latestSample = speedHistory.length > 0 ? speedHistory[speedHistory.length - 1] : null;
   const peakRead = speedHistory.reduce((maxValue, sample) => Math.max(maxValue, sample.readSpeed), 0);
   const peakWrite = speedHistory.reduce((maxValue, sample) => Math.max(maxValue, sample.writeSpeed), 0);
-  const chartEnd = latestSample?.timestamp ?? Date.now();
+  const observedMax = speedHistory.reduce(
+    (maxValue, sample) => Math.max(maxValue, sample.readSpeed, sample.writeSpeed),
+    0
+  );
+  const yAxisMax = speedHistory.length === 0
+    ? INITIAL_Y_AXIS_MAX_MB
+    : clampAxisMax(observedMax * Y_AXIS_PADDING);
+  const chartEnd = latestSample?.timestamp ?? chartSeedTime;
   const chartStart = chartEnd - SPEED_WINDOW_MS;
 
   const isNVMe = device.transport.toUpperCase().includes('NVME') || device.transport.toUpperCase().includes('FABRIC') || device.transport.toUpperCase().includes('PCI');
   const diskType = device.isSolidState === false ? 'HDD' : (isNVMe ? 'NVMe' : 'SSD');
+  const isAtaHdd = report?.protocol === 'ata' && diskType === 'HDD';
+  const ataHealth = report ? getAtaHealthAssessment(report) : null;
+  const ataHighlightAttributes = report ? getAtaHighlightAttributes(report) : [];
 
   let TransportImg = ssdImg;
   if (diskType === 'HDD') TransportImg = hddImg;
@@ -186,15 +275,15 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6">
+    <div className="h-full overflow-y-auto p-6 space-y-5">
       {/* Device Header */}
-      <div className="flex items-center gap-5 pb-6 border-b border-white/10">
-        <div className="flex-shrink-0 w-20 h-20 rounded-2xl border border-white/10 overflow-hidden bg-[#1e293b] shadow-lg">
+      <div className="flex items-center gap-5 pb-5 border-b border-separator">
+        <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-[#3a3a3c]">
           <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-contain select-none" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-white">{device.displayName}</h2>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <h2 className="text-xl font-semibold text-[#f5f5f7]">{device.displayName}</h2>
+          <div className="flex flex-wrap gap-1.5 mt-2">
             <StatusBadge label={device.bsdName} type="default" />
             <StatusBadge label={diskType} type="info" />
             <StatusBadge label={device.isInternal ? 'Internal' : 'External'} type={device.isInternal ? 'default' : 'warning'} />
@@ -202,84 +291,85 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
             <StatusBadge label={device.transport} type="default" />
           </div>
           {device.serial && (
-            <p className="text-xs text-slate-500 mt-2 font-mono">S/N: {device.serial}</p>
+            <p className="text-xs text-[#6e6e73] mt-2 font-mono">S/N: {device.serial}</p>
           )}
-          {/* Link Speed for external drives */}
-          {device.linkSpeed && !device.isInternal && (
-            <div className="flex items-center gap-2 mt-2.5">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-500/15 to-cyan-500/15 border border-purple-500/20">
-                <Cable className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-xs font-medium bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-cyan-300">
-                  {device.linkSpeed}
-                </span>
-              </div>
+          {!device.isInternal && (device.linkSpeed || device.bridgeChip) && (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {device.linkSpeed && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#5e5ce6]/10 border border-[#5e5ce6]/15">
+                  <Cable className="w-3 h-3 text-[#bf5af2]" />
+                  <span className="text-[11px] font-medium text-[#bf5af2]">
+                    {device.linkSpeed}
+                  </span>
+                </div>
+              )}
+              {device.bridgeChip && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-separator bg-white/[0.03]">
+                  <HardDrive className="w-3 h-3 text-[#a1a1a6]" />
+                  <span className="text-[11px] font-medium text-[#a1a1a6]">
+                    {device.bridgeChip} bridge
+                  </span>
+                </div>
+              )}
             </div>
+          )}
+          {device.connectionPath && !device.isInternal && (
+            <p className="text-[11px] text-[#6e6e73] mt-1.5">
+              Path: {device.connectionPath}
+            </p>
           )}
         </div>
       </div>
 
-      {/* Loading State */}
       {loading && (
-        <div className="space-y-4 animate-pulse">
-          <div className="h-4 bg-white/10 rounded w-1/3"></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="h-24 bg-white/5 rounded-xl"></div>
-            <div className="h-24 bg-white/5 rounded-xl"></div>
-            <div className="h-24 bg-white/5 rounded-xl"></div>
-            <div className="h-24 bg-white/5 rounded-xl"></div>
+        <div className="space-y-3 animate-pulse">
+          <div className="h-4 bg-white/[0.06] rounded w-1/3"></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
+            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
+            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
+            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
           </div>
         </div>
       )}
 
-      {/* SMART Unavailable */}
       {!loading && report && !report.readable && !errorDismissed && (
-        <div className="flex items-start gap-3 p-5 rounded-xl bg-red-500/10 border border-red-500/20 relative">
-          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-[#ff453a]/8 border border-[#ff453a]/15 relative">
+          <AlertTriangle className="w-5 h-5 text-[#ff453a] flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h4 className="font-semibold text-red-300">SMART Data Unavailable</h4>
-            <p className="text-sm mt-1 text-red-400/80">{report.failureReason}</p>
-            <p className="text-xs mt-3 text-slate-500">
+            <h4 className="font-semibold text-[#ff453a]">SMART Data Unavailable</h4>
+            <p className="text-sm mt-1 text-[#ff453a]/70">{report.failureReason}</p>
+            <p className="text-xs mt-2 text-[#6e6e73]">
               This is common for USB external drives. The enclosure may not support SMART passthrough.
             </p>
           </div>
           <button 
             onClick={() => setErrorDismissed(true)} 
-            className="p-1 hover:bg-red-500/20 rounded-md transition-colors text-red-400/70 hover:text-red-300"
+            className="p-1 hover:bg-white/[0.06] rounded-md transition-colors text-[#6e6e73] hover:text-[#a1a1a6]"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Live Disk IO Chart */}
       {!loading && (
-        <div className="pt-2">
-          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 uppercase tracking-wider">
-                <Activity className="w-3.5 h-3.5 text-pink-400" />
-                Live Transfer Rate
-              </h3>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wider text-slate-500">
-                <span className="px-2 py-1 rounded-full border border-white/10 bg-white/[0.03]">
-                  {SPEED_SAMPLE_MS / 1000}s samples
-                </span>
-                <span className="px-2 py-1 rounded-full border border-white/10 bg-white/[0.03]">
-                  {SPEED_WINDOW_SECONDS}s window
-                </span>
-                <span className="px-2 py-1 rounded-full border border-white/10 bg-white/[0.03]">
-                  Raw linear
-                </span>
-              </div>
-            </div>
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-[#98989d] flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5" />
+              Live Transfer Rate
+              <span className="text-[11px] text-[#48484a] ml-1">
+                {SPEED_SAMPLE_MS / 1000}s samples / {SPEED_WINDOW_SECONDS}s window
+              </span>
+            </h3>
 
             <button
               type="button"
               onClick={() => setShowEma(prev => !prev)}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
                 showEma
-                  ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-200'
-                  : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
+                  ? 'bg-primary/15 text-[#64d2ff] border border-primary/20'
+                  : 'bg-white/[0.04] text-[#6e6e73] border border-separator hover:text-[#a1a1a6] hover:bg-white/[0.06]'
               }`}
             >
               EMA {showEma ? 'On' : 'Off'}
@@ -287,38 +377,38 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
           </div>
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
-            <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-wider text-blue-200/70">Read Now</div>
-              <div className="mt-1 text-lg font-semibold text-blue-200 font-mono">
+            <div className="rounded-lg border border-[#32d74b]/15 bg-[#32d74b]/6 px-3.5 py-2.5">
+              <div className="text-[11px] text-[#32d74b]/70">Read Now</div>
+              <div className="mt-0.5 text-base font-semibold text-[#32d74b] font-mono">
                 {latestSample ? formatRate(latestSample.readSpeed) : 'Collecting...'}
               </div>
             </div>
-            <div className="rounded-xl border border-pink-500/15 bg-pink-500/5 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-wider text-pink-200/70">Write Now</div>
-              <div className="mt-1 text-lg font-semibold text-pink-200 font-mono">
+            <div className="rounded-lg border border-[#ff9f0a]/15 bg-[#ff9f0a]/6 px-3.5 py-2.5">
+              <div className="text-[11px] text-[#ff9f0a]/70">Write Now</div>
+              <div className="mt-0.5 text-base font-semibold text-[#ff9f0a] font-mono">
                 {latestSample ? formatRate(latestSample.writeSpeed) : 'Collecting...'}
               </div>
             </div>
-            <div className="rounded-xl border border-blue-500/10 bg-white/[0.02] px-4 py-3">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500">Peak Read 60s</div>
-              <div className="mt-1 text-lg font-semibold text-slate-100 font-mono">{formatRate(peakRead)}</div>
+            <div className="rounded-lg border border-separator bg-surface px-3.5 py-2.5">
+              <div className="text-[11px] text-[#6e6e73]">Peak Read 60s</div>
+              <div className="mt-0.5 text-base font-semibold text-[#f5f5f7] font-mono">{formatRate(peakRead)}</div>
             </div>
-            <div className="rounded-xl border border-pink-500/10 bg-white/[0.02] px-4 py-3">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500">Peak Write 60s</div>
-              <div className="mt-1 text-lg font-semibold text-slate-100 font-mono">{formatRate(peakWrite)}</div>
+            <div className="rounded-lg border border-separator bg-surface px-3.5 py-2.5">
+              <div className="text-[11px] text-[#6e6e73]">Peak Write 60s</div>
+              <div className="mt-0.5 text-base font-semibold text-[#f5f5f7] font-mono">{formatRate(peakWrite)}</div>
             </div>
           </div>
 
-          <div className="relative h-72 w-full bg-[#1e293b] rounded-xl border border-white/5 p-4 pl-0">
+          <div className="relative h-64 w-full bg-surface rounded-lg border border-separator p-4 pl-0">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={speedHistory} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis 
                   type="number"
                   dataKey="timestamp"
                   scale="time"
                   domain={[chartStart, chartEnd]}
-                  stroke="#64748b" 
+                  stroke="#48484a" 
                   fontSize={10} 
                   tickMargin={10} 
                   minTickGap={20}
@@ -329,7 +419,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                 />
                 <YAxis 
                   domain={[0, yAxisMax]}
-                  stroke="#64748b" 
+                  stroke="#48484a" 
                   fontSize={10} 
                   tickFormatter={(value) => formatRate(Number(value))}
                   axisLine={false}
@@ -337,45 +427,45 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                   width={78}
                 />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                  contentStyle={{ backgroundColor: '#1c1c1e', borderColor: '#3a3a3c', borderRadius: '8px', fontSize: '12px' }}
                   itemStyle={{ padding: '2px 0' }}
                   labelFormatter={(label) => `${formatTimeLabel(Number(label))} · ${(SPEED_SAMPLE_MS / 1000).toFixed(0)}s avg`}
                   formatter={(value, name) => {
                     const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
                     return [formatRate(numericValue), String(name)];
                   }}
-                  labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
-                  cursor={{ stroke: '#475569', strokeDasharray: '4 4' }}
+                  labelStyle={{ color: '#98989d', marginBottom: '4px' }}
+                  cursor={{ stroke: '#48484a', strokeDasharray: '4 4' }}
                 />
                 <Line 
                   type="linear" 
                   dataKey="readSpeed" 
                   name="Read" 
-                  stroke="#3b82f6" 
-                  strokeWidth={2} 
+                  stroke="#32d74b" 
+                  strokeWidth={1.5} 
                   dot={false}
                   isAnimationActive={false}
-                  activeDot={{ r: 4, fill: '#3b82f6', stroke: '#0f172a' }}
+                  activeDot={{ r: 3, fill: '#32d74b', stroke: '#1c1c1e' }}
                 />
                 <Line 
                   type="linear" 
                   dataKey="writeSpeed" 
                   name="Write" 
-                  stroke="#ec4899" 
-                  strokeWidth={2} 
+                  stroke="#ff9f0a" 
+                  strokeWidth={1.5} 
                   dot={false}
                   isAnimationActive={false}
-                  activeDot={{ r: 4, fill: '#ec4899', stroke: '#0f172a' }}
+                  activeDot={{ r: 3, fill: '#ff9f0a', stroke: '#1c1c1e' }}
                 />
                 {showEma && (
                   <Line
                     type="linear"
                     dataKey="readEma"
                     name="Read EMA"
-                    stroke="#93c5fd"
-                    strokeOpacity={0.8}
-                    strokeWidth={1.5}
-                    strokeDasharray="5 5"
+                    stroke="#30db5b"
+                    strokeOpacity={0.6}
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
                     dot={false}
                     activeDot={false}
                     isAnimationActive={false}
@@ -386,10 +476,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                     type="linear"
                     dataKey="writeEma"
                     name="Write EMA"
-                    stroke="#f9a8d4"
-                    strokeOpacity={0.8}
-                    strokeWidth={1.5}
-                    strokeDasharray="5 5"
+                    stroke="#ffd60a"
+                    strokeOpacity={0.6}
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
                     dot={false}
                     activeDot={false}
                     isAnimationActive={false}
@@ -398,7 +488,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
               </LineChart>
             </ResponsiveContainer>
             {speedHistory.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500 pointer-events-none">
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-[#6e6e73] pointer-events-none">
                 Collecting 2s disk activity samples...
               </div>
             )}
@@ -409,41 +499,157 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       {/* SMART Health Indicators */}
       {!loading && report && report.readable && (
         <>
-          {/* Health Overview */}
-          <div>
-            <h3 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
-              <HeartPulse className="w-3.5 h-3.5 text-emerald-400" />
-              Health Indicators
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <MetricCard
-                icon={<Thermometer />}
-                label="Temperature"
-                value={currentTemp !== undefined && currentTemp !== null ? `${currentTemp}°C` : 'N/A'}
-              />
-              <MetricCard
-                icon={<Shield />}
-                label="Health Status"
-                value={report.healthPassed === undefined ? 'Unknown' : report.healthPassed ? 'Passed' : 'Failing'}
-              />
-              <MetricCard
-                icon={<Clock />}
-                label="Power On Hours"
-                value={report.powerOnHours !== undefined ? report.powerOnHours.toLocaleString() : 'N/A'}
-              />
-              <MetricCard
-                icon={<Zap />}
-                label="Power Cycles"
-                value={report.powerCycles !== undefined ? report.powerCycles.toLocaleString() : 'N/A'}
-              />
-            </div>
-          </div>
+          {isAtaHdd && ataHealth ? (
+            <>
+              <div>
+                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                  <HeartPulse className="w-3.5 h-3.5" />
+                  Drive Snapshot
+                </h3>
+                <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1.9fr] gap-2">
+                  <div className={`rounded-lg border px-4 py-3 ${ataHealth.panelClass}`}>
+                    <div className="text-[11px] text-[#6e6e73]">Health Assessment</div>
+                    <div className={`mt-1.5 text-2xl font-semibold ${ataHealth.accentClass}`}>
+                      {ataHealth.label}
+                    </div>
+                    <p className="mt-1.5 text-[13px] text-[#a1a1a6] leading-5">
+                      {ataHealth.summary}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <MetricCard
+                      icon={<Thermometer />}
+                      label="Temperature"
+                      value={currentTemp !== undefined && currentTemp !== null ? `${currentTemp}°C` : 'N/A'}
+                    />
+                    <MetricCard
+                      icon={<Shield />}
+                      label="SMART Status"
+                      value={report.healthPassed === undefined ? 'Unknown' : report.healthPassed ? 'Passed' : 'Failing'}
+                    />
+                    <MetricCard
+                      icon={<Clock />}
+                      label="Power On Hours"
+                      value={report.powerOnHours !== undefined ? report.powerOnHours.toLocaleString() : 'N/A'}
+                    />
+                    <MetricCard
+                      icon={<HardDrive />}
+                      label="Rotation Rate"
+                      value={report.rotationRateRpm !== undefined ? `${report.rotationRateRpm.toLocaleString()} RPM` : 'N/A'}
+                    />
+                  </div>
+                </div>
+              </div>
 
-          {/* Usage Statistics */}
+              <div>
+                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                  <TriangleAlert className="w-3.5 h-3.5" />
+                  Surface & Reliability
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <MetricCard icon={<AlertTriangle />} label="Reallocated Sectors" value={report.reallocatedSectors?.toLocaleString() ?? 'N/A'} />
+                  <MetricCard icon={<AlertTriangle />} label="Current Pending" value={report.currentPendingSectors?.toLocaleString() ?? 'N/A'} />
+                  <MetricCard icon={<AlertTriangle />} label="Offline Uncorrectable" value={report.offlineUncorrectable?.toLocaleString() ?? 'N/A'} />
+                  <MetricCard icon={<Cable />} label="UDMA CRC Errors" value={report.udmaCrcErrors?.toLocaleString() ?? 'N/A'} />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  Mechanical Counters
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <MetricCard icon={<Zap />} label="Power Cycles" value={report.powerCycles?.toLocaleString() ?? 'N/A'} />
+                  <MetricCard icon={<Clock />} label="Start/Stop Count" value={report.startStopCount?.toLocaleString() ?? 'N/A'} />
+                  <MetricCard icon={<Activity />} label="Load/Unload Count" value={report.loadUnloadCount?.toLocaleString() ?? 'N/A'} />
+                  <MetricCard icon={<AlertTriangle />} label="Spin Retry Count" value={report.spinRetryCount?.toLocaleString() ?? 'N/A'} />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5" />
+                  Interface & Media
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <MetricCard icon={<Cable />} label="Negotiated Link" value={report.interfaceSpeed ?? 'N/A'} />
+                  <MetricCard icon={<Cable />} label="SATA Version" value={report.sataVersion ?? 'N/A'} />
+                  <MetricCard icon={<Database />} label="Logical Sector" value={formatBlockSize(report.logicalSectorSize)} />
+                  <MetricCard icon={<Database />} label="Physical Sector" value={formatBlockSize(report.physicalSectorSize)} />
+                </div>
+              </div>
+
+              {ataHighlightAttributes.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-[#98989d] mb-2.5 flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5" />
+                    Key SMART Attributes
+                  </h3>
+                  <div className="rounded-lg border border-separator overflow-hidden">
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="bg-surface-hover text-[#6e6e73] text-xs">
+                          <th className="text-left py-2 px-3 font-medium w-14">ID</th>
+                          <th className="text-left py-2 px-3 font-medium">Attribute</th>
+                          <th className="text-right py-2 px-3 font-medium w-18">Current</th>
+                          <th className="text-right py-2 px-3 font-medium w-18">Worst</th>
+                          <th className="text-right py-2 px-3 font-medium w-18">Thresh</th>
+                          <th className="text-right py-2 px-3 font-medium w-28">Raw</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ataHighlightAttributes.map((attribute: SmartAttribute, index: number) => (
+                          <tr key={attribute.id} className={`border-t border-separator ${index % 2 === 0 ? '' : 'bg-white/[0.015]'}`}>
+                            <td className="py-2 px-3 text-[#a1a1a6] font-mono">{attribute.id}</td>
+                            <td className="py-2 px-3 text-[#e5e5ea]">{formatAttributeName(attribute.name)}</td>
+                            <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.value ?? '—'}</td>
+                            <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.worst ?? '—'}</td>
+                            <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.threshold ?? '—'}</td>
+                            <td className="py-2 px-3 text-right text-[#e5e5ea] font-mono">{attribute.rawString ?? attribute.rawValue ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                <HeartPulse className="w-3.5 h-3.5" />
+                Health Indicators
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCard
+                  icon={<Thermometer />}
+                  label="Temperature"
+                  value={currentTemp !== undefined && currentTemp !== null ? `${currentTemp}°C` : 'N/A'}
+                />
+                <MetricCard
+                  icon={<Shield />}
+                  label="Health Status"
+                  value={report.healthPassed === undefined ? 'Unknown' : report.healthPassed ? 'Passed' : 'Failing'}
+                />
+                <MetricCard
+                  icon={<Clock />}
+                  label="Power On Hours"
+                  value={report.powerOnHours !== undefined ? report.powerOnHours.toLocaleString() : 'N/A'}
+                />
+                <MetricCard
+                  icon={<Zap />}
+                  label="Power Cycles"
+                  value={report.powerCycles !== undefined ? report.powerCycles.toLocaleString() : 'N/A'}
+                />
+              </div>
+            </div>
+          )}
+
           {(report.dataUnitsRead !== undefined || report.percentageUsed !== undefined) && (
             <div>
-              <h3 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
-                <Database className="w-3.5 h-3.5 text-blue-400" />
+              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5" />
                 Usage Statistics
               </h3>
               <div className="grid grid-cols-2 gap-2">
@@ -455,11 +661,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
             </div>
           )}
 
-          {/* Error Counters */}
-          {(report.unsafeShutdowns !== undefined || report.mediaErrors !== undefined) && (
+          {(report.unsafeShutdowns !== undefined || report.mediaErrors !== undefined || report.errorLogEntries !== undefined) && (
             <div>
-              <h3 className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
-                <TriangleAlert className="w-3.5 h-3.5 text-amber-400" />
+              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                <TriangleAlert className="w-3.5 h-3.5" />
                 Error Counters
               </h3>
               <div className="grid grid-cols-2 gap-2">
@@ -474,52 +679,54 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
         </>
       )}
 
-      {/* Volumes & File Systems */}
       {device.volumes && device.volumes.length > 0 && (
-        <div className="pt-2">
-          <h3 className="text-xs font-semibold text-slate-300 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
-            <Database className="w-3.5 h-3.5 text-cyan-400" />
+        <div>
+          <h3 className="text-sm font-medium text-[#98989d] mb-2.5 flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5" />
             Volumes & File Systems
           </h3>
-          <div className="rounded-xl border border-white/10 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-separator overflow-hidden">
+            <table className="w-full text-[13px]">
               <thead>
-                <tr className="bg-white/5 text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="text-left py-2.5 px-4 font-medium">Volume</th>
-                  <th className="text-left py-2.5 px-4 font-medium">File System</th>
-                  <th className="text-left py-2.5 px-4 font-medium w-32">Usage</th>
-                  <th className="text-right py-2.5 px-4 font-medium">Size</th>
+                <tr className="bg-surface-hover text-[#6e6e73] text-xs">
+                  <th className="text-left py-2 px-3 font-medium">Volume</th>
+                  <th className="text-left py-2 px-3 font-medium">File System</th>
+                  <th className="text-left py-2 px-3 font-medium w-32">Usage</th>
+                  <th className="text-right py-2 px-3 font-medium">Size</th>
                 </tr>
               </thead>
               <tbody>
                 {device.volumes.map((vol, i) => (
-                  <tr key={vol.bsdName} className={`border-t border-white/5 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'} hover:bg-white/[0.04] transition-colors`}>
-                    <td className="py-2.5 px-4">
-                      <div className="font-medium text-slate-200">{vol.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono mt-0.5">{vol.mountPoint ? vol.mountPoint : vol.bsdName}</div>
+                  <tr key={vol.bsdName} className={`border-t border-separator ${i % 2 === 0 ? '' : 'bg-white/[0.015]'} hover:bg-white/[0.03] transition-colors`}>
+                    <td className="py-2 px-3">
+                      <div className="font-medium text-[#e5e5ea]">{vol.name}</div>
+                      <div className="text-[11px] text-[#6e6e73] font-mono mt-0.5">{vol.mountPoint ? vol.mountPoint : vol.bsdName}</div>
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-2 px-3">
                       <StatusBadge label={vol.fileSystem || 'Unknown'} type="info" />
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-2 px-3">
                       {vol.capacityUsed !== undefined && vol.sizeBytes > 0 ? (
-                        <div className="flex flex-col gap-1.5 w-full max-w-[140px]">
+                        <div className="flex flex-col gap-1 w-full max-w-[140px]">
                           <div className="flex justify-between text-xs">
-                            <span className="text-slate-300">{formatSize(vol.capacityUsed)}</span>
-                            <span className="text-slate-500 font-mono text-[10px]">{Math.round((vol.capacityUsed / vol.sizeBytes) * 100)}%</span>
+                            <span className="text-[#a1a1a6]">{formatSize(vol.capacityUsed)}</span>
+                            <span className="text-[#6e6e73] font-mono text-[10px]">{Math.round((vol.capacityUsed / vol.sizeBytes) * 100)}%</span>
                           </div>
-                          <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-1 w-full bg-white/[0.08] rounded-full overflow-hidden">
                             <div 
-                              className={`h-full rounded-full ${((vol.capacityUsed / vol.sizeBytes) * 100) > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
-                              style={{ width: `${Math.min(100, Math.max(0, (vol.capacityUsed / vol.sizeBytes) * 100))}%` }}
+                              className="h-full rounded-full"
+                              style={{ 
+                                width: `${Math.min(100, Math.max(0, (vol.capacityUsed / vol.sizeBytes) * 100))}%`,
+                                backgroundColor: ((vol.capacityUsed / vol.sizeBytes) * 100) > 90 ? '#ff453a' : '#007AFF'
+                              }}
                             />
                           </div>
                         </div>
                       ) : (
-                        <span className="text-slate-500 text-xs">—</span>
+                        <span className="text-[#48484a] text-xs">—</span>
                       )}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-slate-300">
+                    <td className="py-2 px-3 text-right text-[#a1a1a6]">
                       {formatSize(vol.sizeBytes)}
                     </td>
                   </tr>

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as plist from 'plist';
@@ -5,138 +7,24 @@ import { DiskDevice, Volume } from '../../src/shared/types';
 
 const execAsync = promisify(exec);
 
-/**
- * Detect link speed for external drives.
- * Returns a human-readable string like "Thunderbolt 4 · 40 Gb/s" or "USB 5 Gb/s".
- */
-async function detectLinkSpeed(
-  bsdName: string,
-  transport: string,
-  isInternal: boolean,
-  mediaName: string,
-  nvmeData: any,
-): Promise<string | undefined> {
-  if (isInternal) return undefined;
+interface ThunderboltBridgeInfo {
+  bridgeChip?: string;
+  hostLink: string;
+}
 
-  // --- NVMe external drives: get PCIe link info + Thunderbolt tunnel info ---
-  if (transport === 'PCI-Express' || transport.toUpperCase().includes('PCI')) {
-    let nvmeLinkInfo = '';
-    // Get NVMe PCIe link speed and width from SPNVMeDataType
-    if (nvmeData?.SPNVMeDataType) {
-      for (const ctrl of nvmeData.SPNVMeDataType) {
-        if (ctrl._items) {
-          for (const item of ctrl._items) {
-            if (item.bsd_name === bsdName) {
-              const speed = item.spnvme_linkspeed; // e.g. "16.0 GT/s"
-              const width = item.spnvme_linkwidth; // e.g. "x4"
-              if (speed && width) {
-                nvmeLinkInfo = `PCIe ${width} ${speed}`;
-              }
-            }
-          }
-        }
-      }
-    }
+interface UsbBridgeInfo {
+  bridgeChip?: string;
+  hostLink: string;
+}
 
-    // Check if connected via Thunderbolt
-    try {
-      const { stdout: tbOut } = await execAsync('system_profiler SPThunderboltDataType -json');
-      const tbData = JSON.parse(tbOut);
-      if (tbData.SPThunderboltDataType) {
-        for (const bus of tbData.SPThunderboltDataType) {
-          if (bus._items) {
-            for (const device of bus._items) {
-              // Thunderbolt device found connected on this bus
-              const upstreamTag = device.receptacle_upstream_ambiguous_tag;
-              if (upstreamTag?.current_speed_key) {
-                const tbSpeed = upstreamTag.current_speed_key; // "40 Gb/s"
-                const mode = device.mode_key; // "usb_four", "thunderbolt"
-                let tbVersion = 'Thunderbolt';
-                if (mode === 'usb_four' || tbSpeed.includes('40')) {
-                  tbVersion = 'Thunderbolt 4';
-                } else if (tbSpeed.includes('20')) {
-                  tbVersion = 'Thunderbolt 3';
-                }
-                // Return combined info
-                if (nvmeLinkInfo) {
-                  return `${tbVersion} ${tbSpeed} · ${nvmeLinkInfo}`;
-                }
-                return `${tbVersion} ${tbSpeed}`;
-              }
-            }
-          }
-          // Also check receptacle directly if device is connected
-          const receptacle = bus.receptacle_1_tag;
-          if (receptacle?.receptacle_status_key === 'receptacle_connected' && receptacle?.current_speed_key) {
-            const tbSpeed = receptacle.current_speed_key;
-            if (nvmeLinkInfo) {
-              return `Thunderbolt · ${tbSpeed} · ${nvmeLinkInfo}`;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('SPThunderboltDataType error:', e);
-    }
+interface ConnectionDetails {
+  linkSpeed?: string;
+  bridgeChip?: string;
+  connectionPath?: string;
+}
 
-    if (nvmeLinkInfo) return nvmeLinkInfo;
-  }
-
-  // --- USB drives: get link speed from ioreg ---
-  if (transport === 'USB') {
-    try {
-      const { stdout: ioregOut } = await execAsync(
-        'ioreg -r -c IOUSBHostDevice -d 3 -l'
-      );
-      // Parse ioreg output line by line, looking for USB storage devices
-      const lines = ioregOut.split('\n');
-      let currentProductName = '';
-      let currentLinkSpeed = 0;
-      let foundSpeed: number | null = null;
-
-      for (const line of lines) {
-        const productMatch = line.match(/"kUSBProductString"\s*=\s*"([^"]+)"/);
-        if (productMatch) {
-          currentProductName = productMatch[1];
-        }
-        const speedMatch = line.match(/"UsbLinkSpeed"\s*=\s*(\d+)/);
-        if (speedMatch) {
-          currentLinkSpeed = parseInt(speedMatch[1], 10);
-        }
-        // Match by media name (case-insensitive partial match)
-        if (currentProductName && currentLinkSpeed > 0) {
-          const nameNorm = mediaName.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const prodNorm = currentProductName.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (nameNorm.includes(prodNorm) || prodNorm.includes(nameNorm)) {
-            foundSpeed = currentLinkSpeed;
-            break;
-          }
-        }
-      }
-
-      if (foundSpeed) {
-        return formatUsbSpeed(foundSpeed);
-      }
-
-      // Fallback: try to find any USB mass storage device speed
-      // by searching for devices near "disk" entries
-      currentProductName = '';
-      currentLinkSpeed = 0;
-      for (const line of lines) {
-        const speedMatch = line.match(/"UsbLinkSpeed"\s*=\s*(\d+)/);
-        if (speedMatch) {
-          const speed = parseInt(speedMatch[1], 10);
-          if (speed >= 480000000) { // At least USB 2.0 High Speed
-            return formatUsbSpeed(speed);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('ioreg USB speed detection error:', e);
-    }
-  }
-
-  return undefined;
+function normalizeName(value: string | undefined) {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function formatUsbSpeed(bitsPerSec: number): string {
@@ -146,6 +34,213 @@ function formatUsbSpeed(bitsPerSec: number): string {
   if (gbps >= 5) return `USB 5 Gb/s`;
   if (gbps >= 0.48) return `USB 480 Mb/s`;
   return `USB ${Math.round(gbps * 1000)} Mb/s`;
+}
+
+function formatThunderboltLink(mode: string | undefined, speed: string) {
+  const normalizedSpeed = speed.replace(/^Up to\s+/i, '').trim();
+  if (mode === 'usb_four' || normalizedSpeed.includes('40')) {
+    return `Thunderbolt 4 ${normalizedSpeed}`;
+  }
+
+  if (normalizedSpeed.includes('20')) {
+    return `Thunderbolt 3 ${normalizedSpeed}`;
+  }
+
+  return `Thunderbolt ${normalizedSpeed}`;
+}
+
+function describeBridgeChip(vendor: string | undefined, name: string | undefined) {
+  const vendorName = vendor?.trim();
+  const deviceName = name?.trim();
+
+  if (!vendorName) return deviceName;
+  if (!deviceName) return vendorName;
+  if (deviceName.toLowerCase().includes(vendorName.toLowerCase())) return deviceName;
+
+  return `${vendorName} ${deviceName}`;
+}
+
+function findThunderboltBridgeInfo(thunderboltData: any): ThunderboltBridgeInfo | undefined {
+  const candidates: ThunderboltBridgeInfo[] = [];
+
+  for (const bus of thunderboltData?.SPThunderboltDataType ?? []) {
+    for (const device of bus._items ?? []) {
+      const speed = device.receptacle_upstream_ambiguous_tag?.current_speed_key;
+      if (!speed) continue;
+
+      const vendor = typeof device.vendor_name_key === 'string' ? device.vendor_name_key : undefined;
+      if (vendor === 'Apple Inc.') continue;
+
+      const name = typeof device.device_name_key === 'string'
+        ? device.device_name_key
+        : typeof device._name === 'string'
+          ? device._name
+          : undefined;
+
+      candidates.push({
+        bridgeChip: describeBridgeChip(vendor, name),
+        hostLink: formatThunderboltLink(device.mode_key, speed),
+      });
+    }
+  }
+
+  if (candidates.length === 1) return candidates[0];
+  return candidates.find((candidate) => candidate.bridgeChip?.toLowerCase().includes('asmedia'));
+}
+
+function findUsbBridgeInfo(mediaName: string, usbIoregOut: string): UsbBridgeInfo | undefined {
+  const lines = usbIoregOut.split('\n');
+  let currentProductName = '';
+  let currentVendorName = '';
+  let currentLinkSpeed = 0;
+  let genericCandidate: UsbBridgeInfo | undefined;
+  const mediaNameNorm = normalizeName(mediaName);
+
+  for (const line of lines) {
+    const productMatch = line.match(/"kUSBProductString"\s*=\s*"([^"]+)"/);
+    if (productMatch) {
+      currentProductName = productMatch[1];
+    }
+
+    const vendorMatch = line.match(/"USB Vendor Name"\s*=\s*"([^"]+)"/);
+    if (vendorMatch) {
+      currentVendorName = vendorMatch[1];
+    }
+
+    const speedMatch = line.match(/"UsbLinkSpeed"\s*=\s*(\d+)/);
+    if (speedMatch) {
+      currentLinkSpeed = parseInt(speedMatch[1], 10);
+    }
+
+    if (!currentProductName || currentLinkSpeed <= 0) continue;
+
+    const productNorm = normalizeName(currentProductName);
+    const bridgeChip = describeBridgeChip(currentVendorName, currentProductName);
+    const candidate = {
+      bridgeChip,
+      hostLink: formatUsbSpeed(currentLinkSpeed),
+    };
+
+    if (mediaNameNorm && (mediaNameNorm.includes(productNorm) || productNorm.includes(mediaNameNorm))) {
+      return candidate;
+    }
+
+    if (
+      !genericCandidate &&
+      /(asm|asmedia|jmicron|realtek|sata|storage|enclosure|bridge|raid)/i.test(`${currentVendorName} ${currentProductName}`)
+    ) {
+      genericCandidate = candidate;
+    }
+  }
+
+  return genericCandidate;
+}
+
+function getNvmeLinkInfo(bsdName: string, nvmeData: any) {
+  for (const ctrl of nvmeData?.SPNVMeDataType ?? []) {
+    for (const item of ctrl._items ?? []) {
+      if (item.bsd_name !== bsdName) continue;
+
+      const speed = item.spnvme_linkspeed;
+      const width = item.spnvme_linkwidth;
+      if (speed && width) {
+        return `PCIe ${width} ${speed}`;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function detectConnectionDetails(
+  bsdName: string,
+  transport: string,
+  isInternal: boolean,
+  mediaName: string,
+  nvmeData: any,
+  thunderboltData: any,
+  usbIoregOut: string,
+): ConnectionDetails {
+  if (isInternal) return {};
+
+  const upperTransport = transport.toUpperCase();
+  const thunderboltBridge = findThunderboltBridgeInfo(thunderboltData);
+  const usbBridge = usbIoregOut ? findUsbBridgeInfo(mediaName, usbIoregOut) : undefined;
+
+  if (transport === 'PCI-Express' || upperTransport.includes('PCI')) {
+    const nvmeLinkInfo = getNvmeLinkInfo(bsdName, nvmeData);
+    if (thunderboltBridge) {
+      return {
+        linkSpeed: nvmeLinkInfo
+          ? `${thunderboltBridge.hostLink} · ${nvmeLinkInfo}`
+          : thunderboltBridge.hostLink,
+        bridgeChip: thunderboltBridge.bridgeChip,
+        connectionPath: thunderboltBridge.bridgeChip
+          ? `${thunderboltBridge.hostLink} -> ${thunderboltBridge.bridgeChip} bridge -> ${nvmeLinkInfo ?? 'PCIe'}`
+          : undefined,
+      };
+    }
+
+    return {
+      linkSpeed: nvmeLinkInfo,
+    };
+  }
+
+  if (upperTransport.includes('SATA')) {
+    if (thunderboltBridge) {
+      return {
+        linkSpeed: thunderboltBridge.hostLink,
+        bridgeChip: thunderboltBridge.bridgeChip,
+        connectionPath: thunderboltBridge.bridgeChip
+          ? `${thunderboltBridge.hostLink} -> ${thunderboltBridge.bridgeChip} bridge -> SATA`
+          : `${thunderboltBridge.hostLink} -> SATA`,
+      };
+    }
+
+    if (usbBridge) {
+      return {
+        linkSpeed: usbBridge.hostLink,
+        bridgeChip: usbBridge.bridgeChip,
+        connectionPath: usbBridge.bridgeChip
+          ? `${usbBridge.hostLink} -> ${usbBridge.bridgeChip} bridge -> SATA`
+          : `${usbBridge.hostLink} -> SATA`,
+      };
+    }
+  }
+
+  if (upperTransport.includes('USB')) {
+    if (usbBridge) {
+      return {
+        linkSpeed: usbBridge.hostLink,
+        bridgeChip: usbBridge.bridgeChip,
+        connectionPath: usbBridge.bridgeChip
+          ? `${usbBridge.hostLink} -> ${usbBridge.bridgeChip} bridge -> USB`
+          : undefined,
+      };
+    }
+
+    if (thunderboltBridge) {
+      return {
+        linkSpeed: thunderboltBridge.hostLink,
+        bridgeChip: thunderboltBridge.bridgeChip,
+        connectionPath: thunderboltBridge.bridgeChip
+          ? `${thunderboltBridge.hostLink} -> ${thunderboltBridge.bridgeChip} bridge -> USB`
+          : `${thunderboltBridge.hostLink} -> USB`,
+      };
+    }
+  }
+
+  if (thunderboltBridge) {
+    return {
+      linkSpeed: thunderboltBridge.hostLink,
+      bridgeChip: thunderboltBridge.bridgeChip,
+      connectionPath: thunderboltBridge.bridgeChip
+        ? `${thunderboltBridge.hostLink} -> ${thunderboltBridge.bridgeChip} bridge -> ${transport}`
+        : undefined,
+    };
+  }
+
+  return {};
 }
 
 export async function discoverDisks(): Promise<DiskDevice[]> {
@@ -167,6 +262,22 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
       console.warn("SPNVMeDataType error:", e);
     }
 
+    let thunderboltData: any = {};
+    try {
+      const { stdout: thunderboltOut } = await execAsync('system_profiler SPThunderboltDataType -json');
+      thunderboltData = JSON.parse(thunderboltOut);
+    } catch (e) {
+      console.warn('SPThunderboltDataType error:', e);
+    }
+
+    let usbIoregOut = '';
+    try {
+      const { stdout } = await execAsync('ioreg -r -c IOUSBHostDevice -d 3 -l');
+      usbIoregOut = stdout;
+    } catch (e) {
+      console.warn('ioreg USB speed detection error:', e);
+    }
+
     // Get storage/volume info from system_profiler for filesystem details
     let storageData: any[] = [];
     try {
@@ -183,8 +294,8 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
         
         const bsdName = info.DeviceIdentifier || d;
         let isInternal = info.Internal === true;
-        let isSolidState = info.SolidState === true;
-        let transport = info.BusProtocol || 'Unknown';
+        const isSolidState = info.SolidState === true;
+        const transport = info.BusProtocol || 'Unknown';
         if (transport === 'Apple Fabric') isInternal = true; 
 
         if (info.VirtualOrPhysical === 'Virtual') continue;
@@ -207,8 +318,15 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
           }
         }
         
-        // Detect link speed for external drives
-        const linkSpeed = await detectLinkSpeed(bsdName, transport, isInternal, displayModel, nvmeData);
+        const connectionDetails = detectConnectionDetails(
+          bsdName,
+          transport,
+          isInternal,
+          displayModel,
+          nvmeData,
+          thunderboltData,
+          usbIoregOut,
+        );
 
         // Collect volumes for this disk
         const volumes: Volume[] = [];
@@ -311,7 +429,9 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
           isInternal,
           isSolidState,
           transport,
-          linkSpeed,
+          linkSpeed: connectionDetails.linkSpeed,
+          bridgeChip: connectionDetails.bridgeChip,
+          connectionPath: connectionDetails.connectionPath,
           smartSupported: true, 
           smartStatus,
           volumes

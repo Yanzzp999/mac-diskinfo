@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { DiskDevice, SmartReport } from './shared/types';
 import { DiskCard } from './components/DiskCard';
 import { SmartDetail } from './components/SmartDetail';
 import { HardDrive, RefreshCw } from 'lucide-react';
 import appIcon from './assets/app-icon.png';
+
+function getSmartHints(device: DiskDevice) {
+  return {
+    transport: device.transport,
+    isInternal: device.isInternal,
+    bridgeChip: device.bridgeChip,
+    connectionPath: device.connectionPath,
+  };
+}
 
 function App() {
   const [devices, setDevices] = useState<DiskDevice[]>([]);
@@ -12,7 +21,7 @@ function App() {
   const [reports, setReports] = useState<Record<string, SmartReport>>({});
   const [reportLoading, setReportLoading] = useState(false);
 
-  const loadDisks = async (isManualRefresh = false) => {
+  const loadDisks = useCallback(async (isManualRefresh = false) => {
     setLoading(true);
     try {
       const data = await window.electron.scanDisks();
@@ -21,74 +30,70 @@ function App() {
         setReports({}); // clear cached reports so they get re-fetched and errors reappear
       }
       // Auto-select first disk
-      if (data.length > 0 && !selectedId) {
-        setSelectedId(data[0].id);
-      }
+      setSelectedId(prev => prev ?? data[0]?.id ?? null);
     } catch (error) {
       console.error('Failed to load disks:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadSmartReport = async (diskId: string) => {
-    if (reports[diskId]) return; // Already cached
+  const loadSmartReport = useCallback(async (device: DiskDevice) => {
+    if (reports[device.id]) return; // Already cached
     setReportLoading(true);
     try {
-      const data = await window.electron.getSmartReport(diskId);
-      setReports(prev => ({ ...prev, [diskId]: data }));
+      const data = await window.electron.getSmartReport(device.id, getSmartHints(device));
+      setReports(prev => ({ ...prev, [device.id]: data }));
     } catch (e) {
       console.error(e);
     } finally {
       setReportLoading(false);
     }
-  };
+  }, [reports]);
 
   useEffect(() => {
-    loadDisks();
-  }, []);
-
-  useEffect(() => {
-    if (selectedId) {
-      loadSmartReport(selectedId);
-    }
-  }, [selectedId]);
+    void loadDisks();
+  }, [loadDisks]);
 
   const selectedDevice = devices.find(d => d.id === selectedId);
 
+  useEffect(() => {
+    if (selectedDevice) {
+      void loadSmartReport(selectedDevice);
+    }
+  }, [loadSmartReport, selectedDevice]);
+
   return (
-    <div className="h-screen flex flex-col bg-background text-slate-200 overflow-hidden">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-white/5 shadow-sm z-10">
-        <div className="px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={appIcon} alt="mac-diskinfo" className="w-9 h-9 rounded-lg shadow-lg" />
-            <div>
-              <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                mac-diskinfo
-              </h1>
-              <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Smart Health Monitor</p>
-            </div>
+    <div className="h-screen flex flex-col bg-background text-[#f5f5f7] overflow-hidden">
+      <header
+        className="flex-shrink-0 bg-sidebar/80 backdrop-blur-xl border-b border-separator z-10"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <div className="px-5 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <img src={appIcon} alt="mac-diskinfo" className="w-8 h-8 rounded-[7px]" />
+            <h1 className="text-[15px] font-semibold text-[#f5f5f7]">
+              mac-diskinfo
+            </h1>
           </div>
           <button
             onClick={() => loadDisks(true)}
             disabled={loading}
-            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="p-1.5 rounded-md hover:bg-white/[0.08] active:bg-white/[0.12] transition-colors disabled:opacity-40 disabled:cursor-not-allowed group"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 text-slate-400 group-hover:text-white transition-colors ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 text-[#98989d] group-hover:text-[#f5f5f7] transition-colors ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar — Disk List */}
-        <aside className="w-72 flex-shrink-0 border-r border-white/5 bg-surface/30 overflow-y-auto p-3 space-y-1">
+        <aside className="w-64 flex-shrink-0 border-r border-separator bg-sidebar overflow-y-auto p-2 space-y-0.5">
           {loading ? (
-            <div className="space-y-2 p-2">
+            <div className="space-y-1.5 p-1">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-16 bg-white/5 rounded-xl animate-pulse"></div>
+                <div key={i} className="h-14 bg-white/[0.04] rounded-lg animate-pulse"></div>
               ))}
             </div>
           ) : devices.length > 0 ? (
@@ -101,27 +106,27 @@ function App() {
               />
             ))
           ) : (
-            <div className="text-center py-8 text-slate-500 text-sm">
+            <div className="text-center py-8 text-[#6e6e73] text-sm">
               <HardDrive className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p>No disks found</p>
             </div>
           )}
         </aside>
 
-        {/* Right Panel — Detail View */}
         <main className="flex-1 overflow-hidden bg-background">
           {selectedDevice ? (
             <SmartDetail
+              key={selectedDevice.id}
               device={selectedDevice}
               report={reports[selectedId!] || null}
               loading={reportLoading && !reports[selectedId!]}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-slate-500">
+            <div className="h-full flex items-center justify-center text-[#6e6e73]">
               <div className="text-center">
-                <HardDrive className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                <p className="text-lg font-medium">Select a disk</p>
-                <p className="text-sm mt-1">Choose a disk from the sidebar to view SMART details</p>
+                <HardDrive className="w-14 h-14 mx-auto mb-4 opacity-20" />
+                <p className="text-base font-medium text-[#a1a1a6]">Select a disk</p>
+                <p className="text-sm mt-1">Choose a disk from the sidebar to view details</p>
               </div>
             </div>
           )}

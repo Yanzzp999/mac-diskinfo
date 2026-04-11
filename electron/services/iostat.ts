@@ -16,6 +16,9 @@ interface LastStats {
   timestamp: number;
 }
 
+const RECENT_STATS_CACHE_TTL_MS = 15_000;
+const recentStatsCache = new Map<string, LastStats>();
+
 interface IoMonitorHandlers {
   onData: (data: DiskSpeedData) => void;
   onError?: (error: unknown) => void;
@@ -85,13 +88,19 @@ export function createIoMonitor(
   handlers: IoMonitorHandlers
 ): IoMonitorSession {
   let timer: NodeJS.Timeout | null = null;
-  let lastStats: LastStats | null = null;
+  const cachedStats = recentStatsCache.get(bsdName);
+  let lastStats: LastStats | null = cachedStats && Date.now() - cachedStats.timestamp <= RECENT_STATS_CACHE_TTL_MS
+    ? cachedStats
+    : null;
   let stopped = false;
 
   let isPolling = false;
 
   const stop = () => {
     stopped = true;
+    if (lastStats) {
+      recentStatsCache.set(bsdName, lastStats);
+    }
     lastStats = null;
 
     if (timer) {
@@ -128,6 +137,7 @@ export function createIoMonitor(
           bytesWritten: stats.bytesWritten,
           timestamp: now
         };
+        recentStatsCache.set(bsdName, lastStats);
         return;
       }
 
@@ -149,6 +159,7 @@ export function createIoMonitor(
         bytesWritten: stats.bytesWritten,
         timestamp: now
       };
+      recentStatsCache.set(bsdName, lastStats);
 
       handlers.onData({
         bsdName,

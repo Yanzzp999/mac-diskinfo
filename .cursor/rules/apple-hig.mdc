@@ -1,0 +1,17 @@
+---
+description: Apple HIG guidance for macOS-first UI work in this Electron app
+globs:
+  - src/**/*.ts
+  - src/**/*.tsx
+  - src/**/*.css
+  - electron/**/*.ts
+alwaysApply: false
+---
+
+- Use the Apple HIG skill for UI, UX, layout, motion, color, typography, iconography, and accessibility decisions.
+- Treat this repository as a macOS desktop product first. Prefer macOS patterns, then general Apple principles.
+- Keep interfaces clear, restrained, accessible, and native-feeling.
+- Favor sidebars, split views, tables, toolbars, inspectors, and keyboard-friendly interactions over mobile-first patterns.
+- Respect reduced motion, semantic colors, and readable spacing.
+
+@../../docs/ai/skills/apple-hig/SKILL.md

@@ -26,20 +26,20 @@ export function DiskCard({ device, selected, onClick }: DiskCardProps) {
   return (
     <div
       onClick={onClick}
-      className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all duration-200 border
+      className={`flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer transition-colors duration-150
         ${selected
-          ? 'bg-blue-500/10 border-blue-500/30 shadow-lg shadow-blue-500/5'
-          : 'bg-transparent border-transparent hover:bg-white/[0.03] hover:border-white/10'
+          ? 'bg-[#3a3a3c]'
+          : 'hover:bg-white/[0.04]'
         }`}
     >
-      <div className="flex-shrink-0 w-12 h-12 rounded-lg border border-white/10 overflow-hidden bg-[#1e293b] shadow-sm">
+      <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-[#3a3a3c]">
         <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-contain select-none" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className={`text-sm font-semibold truncate ${selected ? 'text-white' : 'text-slate-200'}`}>
+        <h3 className={`text-[13px] font-medium truncate ${selected ? 'text-[#f5f5f7]' : 'text-[#e5e5ea]'}`}>
           {device.displayName}
         </h3>
-        <div className="flex flex-wrap gap-1.5 mt-1.5">
+        <div className="flex flex-wrap gap-1 mt-1">
           <StatusBadge label={diskType} type="info" />
           <StatusBadge label={formatSize(device.sizeBytes)} type="default" />
           {device.smartStatus?.includes('Verified')

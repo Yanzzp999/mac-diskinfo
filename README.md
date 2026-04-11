@@ -54,6 +54,17 @@ npm run build
 
 构建产物默认输出到 `release/` 目录。
 
+## AI 规则 / Skills
+
+仓库已经内置 Apple HIG 设计规则，供不同 AI 编码工具共用：
+
+- Codex App / Antigravity: 使用根目录 `AGENTS.md`
+- 旧版 Antigravity 兼容: 使用根目录 `GEMINI.md`
+- Cursor: 使用 `.cursor/rules/apple-hig.mdc`
+- Canonical skill 内容: `docs/ai/skills/apple-hig/SKILL.md`
+
+这个 skill 基于 `openclaw/skills` 的 `apple-hig`，并按本项目做了 macOS / Electron 场景适配。
+
 ## 注意事项
 
 - 部分 USB / NVMe 外接盒不一定完整支持 SMART

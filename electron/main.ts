@@ -171,12 +171,12 @@ app.whenReady().then(() => {
     return await discoverDisks();
   });
 
-  ipcMain.handle('get-smart-report', async (_, diskId) => {
-    return await getSmartReport(diskId);
+  ipcMain.handle('get-smart-report', async (_, diskId, hints) => {
+    return await getSmartReport(diskId, hints);
   });
 
-  ipcMain.handle('get-temperature', async (_, diskId) => {
-    return await getTemperature(diskId);
+  ipcMain.handle('get-temperature', async (_, diskId, hints) => {
+    return await getTemperature(diskId, hints);
   });
 
   ipcMain.on('start-disk-speed-monitor', (event, bsdName) => {
