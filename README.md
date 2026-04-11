@@ -1,4 +1,4 @@
-# DiskSight
+# mac-diskinfo
 
 一个面向 macOS 的轻量磁盘信息与 SMART 健康查看工具，使用 Electron + React 构建，适合快速查看内置盘和外接盘的基础状态。
 
@@ -14,11 +14,11 @@
 
 ### 总览页面
 
-![DiskSight 总览页面](docs/images/overview.png)
+![mac-diskinfo 总览页面](docs/images/overview.png)
 
 ### 外接 NVMe 设备详情
 
-![DiskSight 外接 NVMe 设备详情](docs/images/external-ssd.png)
+![mac-diskinfo 外接 NVMe 设备详情](docs/images/external-ssd.png)
 
 ## 技术栈
 

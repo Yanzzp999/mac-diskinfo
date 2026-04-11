@@ -62,10 +62,10 @@ function App() {
       <header className="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-white/5 shadow-sm z-10">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={appIcon} alt="DiskSight" className="w-9 h-9 rounded-lg shadow-lg" />
+            <img src={appIcon} alt="mac-diskinfo" className="w-9 h-9 rounded-lg shadow-lg" />
             <div>
               <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                DiskSight
+                mac-diskinfo
               </h1>
               <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase">Smart Health Monitor</p>
             </div>
