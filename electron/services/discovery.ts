@@ -23,6 +23,11 @@ interface ConnectionDetails {
   connectionPath?: string;
 }
 
+function isPartitionOfDisk(parentDisk: string, candidateBsdName: string | undefined) {
+  if (!candidateBsdName) return false;
+  return new RegExp(`^${parentDisk}s\\d+$`).test(candidateBsdName);
+}
+
 function normalizeName(value: string | undefined) {
   return (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -398,8 +403,8 @@ export async function discoverDisks(): Promise<DiskDevice[]> {
         // For USB drives that might only show up in SPStorageDataType
         if (volumes.length === 0) {
           for (const sv of storageData) {
-            // Check if this storage volume's bsd_name starts with a partition of this disk
-            if (sv.bsd_name && sv.bsd_name.startsWith(bsdName.replace('disk', 'disk'))) {
+            // Only associate partitions that belong to this exact root disk.
+            if (isPartitionOfDisk(bsdName, sv.bsd_name)) {
               // Check if the physical_drive matches
               if (sv.physical_drive) {
                 let capacityUsed = undefined;

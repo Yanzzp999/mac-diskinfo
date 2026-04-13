@@ -24,9 +24,13 @@ export function DiskCard({ device, selected, onClick }: DiskCardProps) {
   else if (diskType === 'NVMe') TransportImg = nvmeImg;
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className={`flex items-center gap-3 px-2.5 py-2 rounded-lg cursor-pointer transition-colors duration-150
+      aria-pressed={selected}
+      aria-label={`${device.displayName}, ${formatSize(device.sizeBytes)}, ${diskType}, ${device.smartStatus || 'SMART status unknown'}`}
+      className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left transition-colors duration-150
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar
         ${selected
           ? 'bg-[#3a3a3c]'
           : 'hover:bg-white/[0.04]'
@@ -48,6 +52,6 @@ export function DiskCard({ device, selected, onClick }: DiskCardProps) {
           }
         </div>
       </div>
-    </div>
+    </button>
   );
 }

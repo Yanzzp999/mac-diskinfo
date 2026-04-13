@@ -29,8 +29,15 @@ function App() {
       if (isManualRefresh) {
         setReports({}); // clear cached reports so they get re-fetched and errors reappear
       }
-      // Auto-select first disk
-      setSelectedId(prev => prev ?? data[0]?.id ?? null);
+      // Keep the current selection when it still exists after a refresh.
+      // If the selected disk disappeared, fall back to the first available disk.
+      setSelectedId((prev) => {
+        if (prev && data.some((device) => device.id === prev)) {
+          return prev;
+        }
+
+        return data[0]?.id ?? null;
+      });
     } catch (error) {
       console.error('Failed to load disks:', error);
     } finally {
