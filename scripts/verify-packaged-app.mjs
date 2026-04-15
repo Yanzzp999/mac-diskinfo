@@ -1,5 +1,5 @@
 import { execFile as execFileCallback, spawn } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -70,12 +70,29 @@ async function killMatchingProcesses(profileDir) {
   }
 }
 
+async function verifyBundledSmartctl(appBundlePath) {
+  const bundledSmartctlPath = path.join(appBundlePath, 'Contents', 'Resources', 'smartmontools', 'bin', 'smartctl');
+  const bundledDriveDbPath = path.join(appBundlePath, 'Contents', 'Resources', 'smartmontools', 'share', 'smartmontools', 'drivedb.h');
+
+  await access(bundledSmartctlPath);
+  await access(bundledDriveDbPath);
+
+  const { stdout } = await execFile(bundledSmartctlPath, ['-V']);
+
+  if (!stdout.includes('smartctl')) {
+    throw new Error('Bundled smartctl binary did not execute as expected');
+  }
+
+  console.log('[verify] bundled smartctl is present and executable');
+}
+
 async function main() {
   const appBundlePath = await findPackagedApp();
   const profileDir = await mkdtemp(path.join(os.tmpdir(), 'mac-diskinfo-verify-profile-'));
   const resultFilePath = path.join(profileDir, 'verify-result.json');
 
   console.log(`[verify] launching ${appBundlePath}`);
+  await verifyBundledSmartctl(appBundlePath);
 
   const openProcess = spawn('open', [
     '-na',

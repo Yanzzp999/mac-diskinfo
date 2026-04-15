@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "concurrently -k \"vite\" \"npm run build:electron && electron .\"",
-    "build": "tsc -b && vite build && npm run build:electron && electron-builder",
+    "prepare:smartctl-bundle": "node scripts/prepare-smartctl-bundle.mjs",
+    "build": "npm run prepare:smartctl-bundle && tsc -b && vite build && npm run build:electron && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",
     "build:electron": "tsc -p electron/tsconfig.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json",
@@ -64,6 +65,12 @@
       "dist/**/*",
       "dist-electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build-resources/smartmontools",
+        "to": "smartmontools"
+      }
     ],
     "publish": {
       "provider": "github",

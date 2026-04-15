@@ -2,12 +2,21 @@
 
 import { execFile } from 'child_process';
 import { existsSync } from 'fs';
+import path from 'path';
 import { promisify } from 'util';
 import { SmartAttribute, SmartQueryHints, SmartReport } from '../../src/shared/types';
 
 const execFileAsync = promisify(execFile);
 const smartctlBackendCache = new Map<string, string | undefined>();
+const IS_ELECTRON_RUNTIME = typeof process.versions.electron === 'string';
+const BUNDLED_SMARTCTL_DIR = IS_ELECTRON_RUNTIME && process.resourcesPath
+  ? path.join(process.resourcesPath, 'smartmontools', 'bin')
+  : null;
+const BUNDLED_DRIVEDB_PATH = IS_ELECTRON_RUNTIME && process.resourcesPath
+  ? path.join(process.resourcesPath, 'smartmontools', 'share', 'smartmontools', 'drivedb.h')
+  : null;
 const SMARTCTL_CANDIDATE_PATHS = [
+  ...(BUNDLED_SMARTCTL_DIR ? [path.join(BUNDLED_SMARTCTL_DIR, 'smartctl')] : []),
   '/opt/homebrew/bin/smartctl',
   '/opt/homebrew/sbin/smartctl',
   '/usr/local/bin/smartctl',
@@ -15,13 +24,22 @@ const SMARTCTL_CANDIDATE_PATHS = [
   'smartctl',
 ];
 const SMARTCTL_FALLBACK_PATH_ENTRIES = [
+  ...(BUNDLED_SMARTCTL_DIR ? [BUNDLED_SMARTCTL_DIR] : []),
   '/opt/homebrew/bin',
   '/opt/homebrew/sbin',
   '/usr/local/bin',
   '/usr/local/sbin',
 ];
+const DRIVEDB_CANDIDATE_PATHS = [
+  ...(BUNDLED_DRIVEDB_PATH ? [BUNDLED_DRIVEDB_PATH] : []),
+  '/opt/homebrew/share/smartmontools/drivedb.h',
+  '/opt/homebrew/opt/smartmontools/share/smartmontools/drivedb.h',
+  '/usr/local/share/smartmontools/drivedb.h',
+  '/usr/local/opt/smartmontools/share/smartmontools/drivedb.h',
+];
 
 let smartctlBinaryPath: string | null = null;
+let smartctlDriveDbPath: string | null = null;
 
 interface SmartctlAttempt {
   backend?: string;
@@ -55,10 +73,24 @@ function resolveSmartctlBinary() {
   if (smartctlBinaryPath) return smartctlBinaryPath;
 
   smartctlBinaryPath =
-    SMARTCTL_CANDIDATE_PATHS.find((candidate) => candidate !== 'smartctl' && existsSync(candidate)) ??
+    SMARTCTL_CANDIDATE_PATHS.find((candidate) => {
+      if (candidate === 'smartctl') return false;
+      return existsSync(candidate);
+    }) ??
     'smartctl';
 
   return smartctlBinaryPath;
+}
+
+function resolveSmartctlDriveDbPath() {
+  if (smartctlDriveDbPath) return smartctlDriveDbPath;
+
+  smartctlDriveDbPath =
+    DRIVEDB_CANDIDATE_PATHS.find((candidate) => {
+      return existsSync(candidate);
+    }) ?? null;
+
+  return smartctlDriveDbPath;
 }
 
 function buildSmartctlEnv() {
@@ -119,7 +151,12 @@ function buildSmartctlBackends(diskId: string, hints?: SmartQueryHints) {
 async function runSmartctl(diskId: string, backend?: string): Promise<SmartctlAttempt> {
   const safeDiskId = sanitizeDiskId(diskId);
   const smartctlBinary = resolveSmartctlBinary();
+  const driveDbPath = resolveSmartctlDriveDbPath();
   const args = ['-a'];
+
+  if (driveDbPath) {
+    args.push('-B', driveDbPath);
+  }
 
   if (backend) {
     args.push('-d', backend);
@@ -139,7 +176,7 @@ async function runSmartctl(diskId: string, backend?: string): Promise<SmartctlAt
     if (error.code === 'ENOENT') {
       return {
         backend,
-        failureReason: 'smartctl was not found. Install smartmontools or make sure Homebrew paths are available to the app.',
+        failureReason: 'smartctl was not found. The app could not find its bundled smartctl binary or a system installation.',
       };
     }
 
