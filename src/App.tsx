@@ -63,6 +63,10 @@ function App() {
     void loadDisks();
   }, [loadDisks]);
 
+  useEffect(() => {
+    window.electron.notifyAppReady();
+  }, []);
+
   const selectedDevice = devices.find(d => d.id === selectedId);
 
   useEffect(() => {

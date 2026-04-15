@@ -204,6 +204,28 @@ function getDisplayedAttributes(report: SmartReport, showAll: boolean) {
   return all.filter(attr => KEY_ATTRIBUTE_IDS.has(attr.id) || getAttributeHealthStatus(attr) !== 'ok');
 }
 
+function getSmartUnavailableHint(device: DiskDevice, report: SmartReport) {
+  const failureReason = report.failureReason?.toLowerCase() ?? '';
+  const hintText = `${device.transport} ${device.bridgeChip ?? ''} ${device.connectionPath ?? ''}`.toLowerCase();
+  const isExternalLike = !device.isInternal || hintText.includes('usb') || hintText.includes('thunderbolt');
+
+  if (failureReason.includes('smartctl was not found') || failureReason.includes('command not found')) {
+    return 'smartctl 没有被应用找到。通常是没有安装 smartmontools，或打包应用拿不到 Homebrew 路径。';
+  }
+
+  if (failureReason.includes('iocreateplugininterfaceforservice failed')) {
+    return isExternalLike
+      ? '这类设备常见于盒子不支持 SMART 透传，或 macOS 没有把底层 SMART 接口暴露给 smartctl。'
+      : 'macOS 可能没有把这块内置盘的 SMART 接口暴露给 smartctl，所以即使命令存在也读不到。';
+  }
+
+  if (isExternalLike) {
+    return '这类问题在 USB / Thunderbolt 外置硬盘盒上很常见，外壳桥接芯片可能不支持 SMART 透传。';
+  }
+
+  return '当前系统没有成功返回这块盘的 SMART 原始信息。';
+}
+
 export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
@@ -407,7 +429,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
             <h4 className="font-semibold text-[#ff453a]">SMART Data Unavailable</h4>
             <p className="text-sm mt-1 text-[#ff453a]/70">{report.failureReason}</p>
             <p className="text-xs mt-2 text-[#6e6e73]">
-              This is common for USB external drives. The enclosure may not support SMART passthrough.
+              {getSmartUnavailableHint(device, report)}
             </p>
           </div>
           <button 

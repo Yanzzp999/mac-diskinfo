@@ -134,6 +134,8 @@ function buildFallbackInfo(currentVersion: string): SharedUpdateInfo {
     downloadUrl: null,
     releaseNotes: '',
     publishedAt: '',
+    downloadMode: 'manual',
+    availabilityMessage: null,
   };
 }
 
@@ -153,6 +155,8 @@ function mergeElectronUpdateInfo(
     downloadUrl: existingInfo?.downloadUrl ?? pickDownloadUrl(electronInfo.files),
     releaseNotes: existingInfo?.releaseNotes || normalizeReleaseNotes(electronInfo.releaseNotes),
     publishedAt: existingInfo?.publishedAt ?? electronInfo.releaseDate,
+    downloadMode: 'auto',
+    availabilityMessage: null,
   };
 }
 
@@ -203,7 +207,30 @@ async function fetchGithubReleaseInfo(): Promise<SharedUpdateInfo> {
     downloadUrl: preferredAsset?.browser_download_url ?? null,
     releaseNotes: release.body ?? '',
     publishedAt: release.published_at,
+    downloadMode: 'manual',
+    availabilityMessage: null,
   };
+}
+
+function isMissingUpdateMetadataError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return message.includes('latest-mac.yml') && (message.includes('404') || message.includes('cannot find'));
+}
+
+function toManualDownloadInfo(info: SharedUpdateInfo): SharedUpdateInfo {
+  return {
+    ...info,
+    downloadMode: 'manual',
+    availabilityMessage: '当前 GitHub Release 缺少自动更新文件，这次需要手动下载安装。',
+  };
+}
+
+function createUserFacingUpdateError(error: unknown) {
+  if (isMissingUpdateMetadataError(error)) {
+    return new Error('当前 GitHub Release 缺少自动更新文件，请先手动下载安装本次更新。');
+  }
+
+  return new Error(getErrorMessage(error));
 }
 
 async function promptToInstall(info: SharedUpdateInfo) {
@@ -375,13 +402,24 @@ export async function checkForUpdates(): Promise<UpdateState> {
       return snapshotState();
     } catch (error) {
       const githubInfo = await releaseInfoPromise;
+
+      if (githubInfo && isMissingUpdateMetadataError(error)) {
+        setState({
+          status: githubInfo.updateAvailable ? 'available' : 'latest',
+          info: githubInfo.updateAvailable ? toManualDownloadInfo(githubInfo) : githubInfo,
+          progress: null,
+          error: null,
+        });
+        return snapshotState();
+      }
+
       setState({
         status: 'error',
         info: githubInfo,
         progress: null,
         error: getErrorMessage(error),
       });
-      throw error instanceof Error ? error : new Error(getErrorMessage(error));
+      throw createUserFacingUpdateError(error);
     }
   })().finally(() => {
     checkPromise = null;
@@ -410,6 +448,10 @@ export async function downloadUpdate(): Promise<UpdateState> {
     if (currentState.status === 'downloaded') {
       downloadRequested = false;
       return snapshotState();
+    }
+
+    if (currentState.info?.downloadMode === 'manual') {
+      throw new Error('当前 GitHub Release 缺少自动更新文件，请打开发布页手动下载安装。');
     }
 
     setState({
@@ -450,7 +492,7 @@ export async function downloadUpdate(): Promise<UpdateState> {
         progress: null,
         error: getErrorMessage(error),
       });
-      throw error instanceof Error ? error : new Error(getErrorMessage(error));
+      throw createUserFacingUpdateError(error);
     })
     .finally(() => {
       downloadRequested = false;

@@ -10,6 +10,7 @@ import {
   type WebContentsDidStartNavigationEventParams,
 } from 'electron';
 import * as path from 'path';
+import { writeFile } from 'node:fs/promises';
 import { discoverDisks } from './services/discovery';
 import { getSmartReport, getTemperature } from './services/smart';
 import { createIoMonitor, type IoMonitorSession } from './services/iostat';
@@ -32,6 +33,22 @@ interface RendererMonitorContext {
 }
 
 const diskSpeedMonitorContexts = new Map<number, RendererMonitorContext>();
+const verifyResultFileArg = process.argv.find((arg) => arg.startsWith('--verify-result-file='));
+const verifyResultFilePath = verifyResultFileArg?.slice('--verify-result-file='.length) || null;
+
+async function writeVerifyResult(status: 'renderer-ready' | 'did-fail-load', details: Record<string, unknown>) {
+  if (!verifyResultFilePath) return;
+
+  await writeFile(verifyResultFilePath, JSON.stringify({
+    status,
+    timestamp: new Date().toISOString(),
+    ...details,
+  }, null, 2));
+}
+
+function getAppRootPath() {
+  return app.isPackaged ? app.getAppPath() : path.join(__dirname, '../..');
+}
 
 function teardownRendererMonitorContext(senderId: number) {
   const context = diskSpeedMonitorContexts.get(senderId);
@@ -142,9 +159,11 @@ function startDiskSpeedMonitor(contents: WebContents, bsdName: string) {
 }
 
 function createWindow() {
+  const appRootPath = getAppRootPath();
   const iconPath = app.isPackaged
-    ? path.join(__dirname, '../dist/icon.png')
-    : path.join(__dirname, '../../public/icon.png');
+    ? path.join(appRootPath, 'dist/icon.png')
+    : path.join(appRootPath, 'public/icon.png');
+  const rendererEntryPath = path.join(appRootPath, 'dist/index.html');
 
   const mainWindow = new BrowserWindow({
     width: 1000,
@@ -165,7 +184,7 @@ function createWindow() {
 
   // Depending on whether we're in dev or prod, load localhost or dist index.html
   if (app.isPackaged) {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadFile(rendererEntryPath);
   } else {
     // Note: port 5173 is the default for Vite. 
     // We should make sure Vite config is running on this port in dev mode
@@ -173,7 +192,32 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('[app] failed to load renderer', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      rendererEntryPath,
+      appRootPath,
+      isPackaged: app.isPackaged,
+    });
+
+    void writeVerifyResult('did-fail-load', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      rendererEntryPath,
+      appRootPath,
+      isPackaged: app.isPackaged,
+    });
+  });
+
   mainWindow.webContents.once('did-finish-load', () => {
+    console.log('[app] renderer did-finish-load', {
+      rendererEntryPath,
+      appRootPath,
+      isPackaged: app.isPackaged,
+    });
     mainWindow.webContents.send('update-state', getUpdateState());
   });
 }
@@ -225,6 +269,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+  });
+
+  ipcMain.on('renderer-ready', () => {
+    console.log('[app] renderer reported ready');
+    void writeVerifyResult('renderer-ready', {
+      isPackaged: app.isPackaged,
+      appRootPath: getAppRootPath(),
+    });
   });
 
   ipcMain.on('open-external', (_, url: string) => {

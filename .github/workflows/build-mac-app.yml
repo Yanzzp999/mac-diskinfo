@@ -41,6 +41,9 @@ jobs:
         run: npm run build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Packaged App
+        run: npm run verify:packaged
         
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v6
@@ -49,7 +52,9 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
-            release/*.app
+            release/*.blockmap
+            release/latest-mac.yml
+            release/**/*.app
 
       - name: Create GitHub Release
         env:
@@ -66,8 +71,8 @@ jobs:
           EOF
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" release/*.dmg release/*.zip --clobber
+            gh release upload "$tag" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml --clobber
             gh release edit "$tag" --title "$title" --notes-file "$notes_file"
           else
-            gh release create "$tag" release/*.dmg release/*.zip --title "$title" --notes-file "$notes_file"
+            gh release create "$tag" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml --title "$title" --notes-file "$notes_file"
           fi

@@ -86,6 +86,8 @@ export interface UpdateInfo {
   downloadUrl: string | null;
   releaseNotes: string;
   publishedAt: string;
+  downloadMode: 'auto' | 'manual';
+  availabilityMessage: string | null;
 }
 
 export type UpdateStatus =
@@ -125,6 +127,7 @@ declare global {
       installUpdate: () => Promise<void>;
       getUpdateState: () => Promise<UpdateState>;
       onUpdateStateChange: (callback: (state: UpdateState) => void) => () => void;
+      notifyAppReady: () => void;
       getAppVersion: () => Promise<string>;
       openExternal: (url: string) => void;
     }

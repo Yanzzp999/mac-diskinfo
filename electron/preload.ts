@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.off('update-state', listener);
     };
   },
+  notifyAppReady: () => ipcRenderer.send('renderer-ready'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
 });

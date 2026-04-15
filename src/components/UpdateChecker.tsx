@@ -32,6 +32,14 @@ export function UpdateChecker() {
   const startDownload = useCallback(async () => {
     setPopoverOpen(true);
 
+    if (updateState.info?.downloadMode === 'manual') {
+      const url = updateState.info.downloadUrl ?? updateState.info.releaseUrl;
+      if (url) {
+        window.electron.openExternal(url);
+      }
+      return;
+    }
+
     try {
       const result = await window.electron.downloadUpdate();
       setUpdateState(result);
@@ -42,7 +50,7 @@ export function UpdateChecker() {
         error: e instanceof Error ? e.message : '下载更新失败',
       }));
     }
-  }, []);
+  }, [updateState.info]);
 
   const installDownloadedUpdate = useCallback(async () => {
     try {
@@ -151,10 +159,26 @@ export function UpdateChecker() {
     return `${value.toFixed(maximumFractionDigits)} ${units[unitIndex]}`;
   }
 
+  function getDisplayErrorMessage(message: string | null) {
+    if (!message) return '无法连接到 GitHub';
+
+    const normalized = message
+      .replace(/^Error invoking remote method '.*?':\s*/i, '')
+      .replace(/^Error:\s*/i, '');
+
+    if (normalized.includes('latest-mac.yml')) {
+      return '当前 GitHub Release 缺少自动更新文件，请先手动下载安装本次更新。';
+    }
+
+    return normalized;
+  }
+
   const { status, info, progress, error } = updateState;
   const hasBadge = status === 'available' || status === 'downloaded';
   const progressPercent = Math.max(0, Math.min(100, Math.round(progress?.percent ?? 0)));
   const releaseNotes = info?.releaseNotes.trim();
+  const isManualDownloadOnly = info?.downloadMode === 'manual';
+  const displayError = getDisplayErrorMessage(error);
 
   return (
     <div className="relative" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
@@ -240,7 +264,7 @@ export function UpdateChecker() {
               )}
 
               <p className="text-[12px] text-[#6e6e73] mb-3">
-                点击“立即更新”后会在后台下载，下载完成后会弹出安装提示。
+                {info.availabilityMessage ?? '点击“立即更新”后会在后台下载，下载完成后会弹出安装提示。'}
               </p>
 
               <div className="flex gap-2">
@@ -249,7 +273,7 @@ export function UpdateChecker() {
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-white text-[13px] font-medium rounded-lg transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  立即更新
+                  {isManualDownloadOnly ? '下载更新' : '立即更新'}
                 </button>
                 <button
                   onClick={handleOpenRelease}
@@ -360,7 +384,7 @@ export function UpdateChecker() {
                   更新失败
                 </p>
                 <p className="text-[12px] text-[#6e6e73]">
-                  {error ?? '无法连接到 GitHub'}
+                  {displayError}
                 </p>
               </div>
               <div className="flex gap-2">

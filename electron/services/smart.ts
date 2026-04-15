@@ -1,11 +1,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
+import { existsSync } from 'fs';
 import { promisify } from 'util';
 import { SmartAttribute, SmartQueryHints, SmartReport } from '../../src/shared/types';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const smartctlBackendCache = new Map<string, string | undefined>();
+const SMARTCTL_CANDIDATE_PATHS = [
+  '/opt/homebrew/bin/smartctl',
+  '/opt/homebrew/sbin/smartctl',
+  '/usr/local/bin/smartctl',
+  '/usr/local/sbin/smartctl',
+  'smartctl',
+];
+const SMARTCTL_FALLBACK_PATH_ENTRIES = [
+  '/opt/homebrew/bin',
+  '/opt/homebrew/sbin',
+  '/usr/local/bin',
+  '/usr/local/sbin',
+];
+
+let smartctlBinaryPath: string | null = null;
 
 interface SmartctlAttempt {
   backend?: string;
@@ -33,6 +49,32 @@ function dedupeBackends(backends: Array<string | undefined>) {
   }
 
   return unique;
+}
+
+function resolveSmartctlBinary() {
+  if (smartctlBinaryPath) return smartctlBinaryPath;
+
+  smartctlBinaryPath =
+    SMARTCTL_CANDIDATE_PATHS.find((candidate) => candidate !== 'smartctl' && existsSync(candidate)) ??
+    'smartctl';
+
+  return smartctlBinaryPath;
+}
+
+function buildSmartctlEnv() {
+  const existingPath = process.env.PATH ?? '';
+  const pathEntries = existingPath.split(':').filter(Boolean);
+
+  for (const candidate of SMARTCTL_FALLBACK_PATH_ENTRIES) {
+    if (!pathEntries.includes(candidate)) {
+      pathEntries.unshift(candidate);
+    }
+  }
+
+  return {
+    ...process.env,
+    PATH: pathEntries.join(':'),
+  };
 }
 
 function buildSmartctlBackends(diskId: string, hints?: SmartQueryHints) {
@@ -76,15 +118,31 @@ function buildSmartctlBackends(diskId: string, hints?: SmartQueryHints) {
 
 async function runSmartctl(diskId: string, backend?: string): Promise<SmartctlAttempt> {
   const safeDiskId = sanitizeDiskId(diskId);
-  const backendArg = backend ? ` -d ${backend}` : '';
+  const smartctlBinary = resolveSmartctlBinary();
+  const args = ['-a'];
+
+  if (backend) {
+    args.push('-d', backend);
+  }
+
+  args.push(`/dev/${safeDiskId}`, '--json');
 
   try {
-    const { stdout } = await execAsync(`smartctl -a${backendArg} /dev/${safeDiskId} --json`);
+    const { stdout } = await execFileAsync(smartctlBinary, args, {
+      env: buildSmartctlEnv(),
+    });
     return {
       backend,
       data: JSON.parse(stdout),
     };
   } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return {
+        backend,
+        failureReason: 'smartctl was not found. Install smartmontools or make sure Homebrew paths are available to the app.',
+      };
+    }
+
     if (error.stdout) {
       try {
         return {
@@ -98,7 +156,7 @@ async function runSmartctl(diskId: string, backend?: string): Promise<SmartctlAt
 
     return {
       backend,
-      failureReason: error.message || 'Unknown smartctl error',
+      failureReason: error.stderr || error.message || 'Unknown smartctl error',
     };
   }
 }
