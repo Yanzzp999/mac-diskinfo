@@ -54,9 +54,13 @@
       "category": "public.app-category.utilities",
       "icon": "public/icon.png",
       "target": [
+        "dir",
         "dmg",
         "zip"
       ]
+    },
+    "dmg": {
+      "writeUpdateInfo": false
     },
     "directories": {
       "output": "release"
