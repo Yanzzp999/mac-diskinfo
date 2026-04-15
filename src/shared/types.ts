@@ -88,6 +88,29 @@ export interface UpdateInfo {
   publishedAt: string;
 }
 
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'latest'
+  | 'error';
+
+export interface UpdateProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
+export interface UpdateState {
+  status: UpdateStatus;
+  info: UpdateInfo | null;
+  progress: UpdateProgress | null;
+  error: string | null;
+}
+
 declare global {
   interface Window {
     electron: {
@@ -97,7 +120,11 @@ declare global {
       startDiskSpeedMonitor: (bsdName: string) => void;
       stopDiskSpeedMonitor: (bsdName: string) => void;
       onDiskSpeedUpdate: (callback: (data: DiskSpeedData) => void) => () => void;
-      checkForUpdates: () => Promise<UpdateInfo>;
+      checkForUpdates: () => Promise<UpdateState>;
+      downloadUpdate: () => Promise<UpdateState>;
+      installUpdate: () => Promise<void>;
+      getUpdateState: () => Promise<UpdateState>;
+      onUpdateStateChange: (callback: (state: UpdateState) => void) => () => void;
       getAppVersion: () => Promise<string>;
       openExternal: (url: string) => void;
     }

@@ -14,14 +14,11 @@
     "build:electron": "tsc -p electron/tsconfig.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json"
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "plist": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "lucide-react": "^1.7.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "recharts": "^3.8.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
@@ -35,6 +32,10 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",
@@ -49,7 +50,11 @@
     "appId": "com.mac-diskinfo.app",
     "mac": {
       "category": "public.app-category.utilities",
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "directories": {
       "output": "release"

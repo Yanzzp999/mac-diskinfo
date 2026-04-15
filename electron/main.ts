@@ -13,7 +13,13 @@ import * as path from 'path';
 import { discoverDisks } from './services/discovery';
 import { getSmartReport, getTemperature } from './services/smart';
 import { createIoMonitor, type IoMonitorSession } from './services/iostat';
-import { checkForUpdates } from './services/updater';
+import {
+  checkForUpdates,
+  downloadUpdate,
+  getUpdateState,
+  installUpdate,
+  onUpdateStateChange,
+} from './services/updater';
 
 interface ActiveDiskSpeedMonitor {
   bsdName: string;
@@ -166,9 +172,21 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   }
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    mainWindow.webContents.send('update-state', getUpdateState());
+  });
 }
 
 app.whenReady().then(() => {
+  onUpdateStateChange((state) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('update-state', state);
+      }
+    }
+  });
+
   ipcMain.handle('scan-disks', async () => {
     return await discoverDisks();
   });
@@ -191,6 +209,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle('check-for-updates', async () => {
     return await checkForUpdates();
+  });
+
+  ipcMain.handle('download-update', async () => {
+    return await downloadUpdate();
+  });
+
+  ipcMain.handle('install-update', async () => {
+    installUpdate();
+  });
+
+  ipcMain.handle('get-update-state', () => {
+    return getUpdateState();
   });
 
   ipcMain.handle('get-app-version', () => {

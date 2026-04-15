@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { DiskSpeedData, SmartQueryHints } from '../src/shared/types';
+import type { DiskSpeedData, SmartQueryHints, UpdateState } from '../src/shared/types';
 
 contextBridge.exposeInMainWorld('electron', {
   scanDisks: () => ipcRenderer.invoke('scan-disks'),
@@ -19,6 +19,20 @@ contextBridge.exposeInMainWorld('electron', {
     };
   },
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
+  onUpdateStateChange: (callback: (state: UpdateState) => void) => {
+    const listener = (_event: IpcRendererEvent, state: UpdateState) => {
+      callback(state);
+    };
+
+    ipcRenderer.on('update-state', listener);
+
+    return () => {
+      ipcRenderer.off('update-state', listener);
+    };
+  },
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
 });

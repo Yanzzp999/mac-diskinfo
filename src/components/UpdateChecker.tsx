@@ -1,28 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUpCircle, Download, ExternalLink, X, Loader2 } from 'lucide-react';
-import type { UpdateInfo } from '../shared/types';
+import type { UpdateState } from '../shared/types';
 
-type CheckState = 'idle' | 'checking' | 'latest' | 'available' | 'error';
+const INITIAL_UPDATE_STATE: UpdateState = {
+  status: 'idle',
+  info: null,
+  progress: null,
+  error: null,
+};
 
 export function UpdateChecker() {
-  const [state, setState] = useState<CheckState>('idle');
-  const [info, setInfo] = useState<UpdateInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateState>(INITIAL_UPDATE_STATE);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const check = useCallback(async () => {
-    setState('checking');
-    setError(null);
     try {
       const result = await window.electron.checkForUpdates();
-      setInfo(result);
-      setState(result.updateAvailable ? 'available' : 'latest');
-      if (result.updateAvailable) setPopoverOpen(true);
+      setUpdateState(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      setState('error');
+      setUpdateState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: e instanceof Error ? e.message : 'Unknown error',
+      }));
+      setPopoverOpen(true);
+    }
+  }, []);
+
+  const startDownload = useCallback(async () => {
+    setPopoverOpen(true);
+
+    try {
+      const result = await window.electron.downloadUpdate();
+      setUpdateState(result);
+    } catch (e) {
+      setUpdateState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: e instanceof Error ? e.message : '下载更新失败',
+      }));
+    }
+  }, []);
+
+  const installDownloadedUpdate = useCallback(async () => {
+    try {
+      await window.electron.installUpdate();
+    } catch (e) {
+      setUpdateState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: e instanceof Error ? e.message : '安装更新失败',
+      }));
+      setPopoverOpen(true);
     }
   }, []);
 
@@ -30,6 +61,46 @@ export function UpdateChecker() {
     const timer = setTimeout(check, 3000);
     return () => clearTimeout(timer);
   }, [check]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void window.electron
+      .getUpdateState()
+      .then((state) => {
+        if (!cancelled) {
+          setUpdateState(state);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setUpdateState((prev) => ({
+            ...prev,
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          }));
+        }
+      });
+
+    const dispose = window.electron.onUpdateStateChange((state) => {
+      setUpdateState(state);
+    });
+
+    return () => {
+      cancelled = true;
+      dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      updateState.status === 'available' ||
+      updateState.status === 'downloaded' ||
+      updateState.status === 'error'
+    ) {
+      setPopoverOpen(true);
+    }
+  }, [updateState.status]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -47,15 +118,12 @@ export function UpdateChecker() {
   }, [popoverOpen]);
 
   function handleOpenRelease() {
-    if (info?.releaseUrl) window.electron.openExternal(info.releaseUrl);
-  }
-
-  function handleDownload() {
-    const url = info?.downloadUrl ?? info?.releaseUrl;
-    if (url) window.electron.openExternal(url);
+    if (updateState.info?.releaseUrl) window.electron.openExternal(updateState.info.releaseUrl);
   }
 
   function formatDate(iso: string) {
+    if (!iso) return '未知日期';
+
     try {
       return new Date(iso).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -67,14 +135,33 @@ export function UpdateChecker() {
     }
   }
 
-  const hasBadge = state === 'available';
+  function formatBytes(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    const maximumFractionDigits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(maximumFractionDigits)} ${units[unitIndex]}`;
+  }
+
+  const { status, info, progress, error } = updateState;
+  const hasBadge = status === 'available' || status === 'downloaded';
+  const progressPercent = Math.max(0, Math.min(100, Math.round(progress?.percent ?? 0)));
+  const releaseNotes = info?.releaseNotes.trim();
 
   return (
     <div className="relative" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       <button
         ref={buttonRef}
         onClick={() => {
-          if (state === 'idle' || state === 'error') {
+          if (status === 'idle') {
             void check();
           } else {
             setPopoverOpen((v) => !v);
@@ -82,18 +169,22 @@ export function UpdateChecker() {
         }}
         className="relative p-1.5 rounded-md hover:bg-white/[0.08] active:bg-white/[0.12] transition-colors group"
         title={
-          state === 'checking'
+          status === 'checking'
             ? '正在检查更新…'
-            : state === 'available'
+            : status === 'downloading'
+              ? `正在后台下载更新…${progressPercent}%`
+              : status === 'downloaded'
+                ? `新版本 v${info?.latestVersion} 已下载完成`
+                : status === 'available'
               ? `新版本 v${info?.latestVersion} 可用`
-              : state === 'latest'
+              : status === 'latest'
                 ? '已是最新版本'
-                : state === 'error'
-                  ? '检查更新失败，点击重试'
+                : status === 'error'
+                  ? '更新失败，点击查看详情'
                   : '检查更新'
         }
       >
-        {state === 'checking' ? (
+        {status === 'checking' || status === 'downloading' ? (
           <Loader2 className="w-4 h-4 text-[#98989d] animate-spin" />
         ) : (
           <ArrowUpCircle
@@ -126,7 +217,7 @@ export function UpdateChecker() {
             </button>
           </div>
 
-          {state === 'available' && info && (
+          {status === 'available' && info && (
             <div className="px-4 pb-4">
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-[20px] font-bold text-[#f5f5f7] tracking-tight">
@@ -140,21 +231,25 @@ export function UpdateChecker() {
                 发布于 {formatDate(info.publishedAt)} · 当前版本 v{info.currentVersion}
               </p>
 
-              {info.releaseNotes && (
+              {releaseNotes && (
                 <div className="mb-3 max-h-28 overflow-y-auto rounded-lg bg-background/60 p-2.5">
                   <p className="text-[12px] text-[#a1a1a6] leading-relaxed whitespace-pre-wrap">
-                    {info.releaseNotes}
+                    {releaseNotes}
                   </p>
                 </div>
               )}
 
+              <p className="text-[12px] text-[#6e6e73] mb-3">
+                点击“立即更新”后会在后台下载，下载完成后会弹出安装提示。
+              </p>
+
               <div className="flex gap-2">
                 <button
-                  onClick={handleDownload}
+                  onClick={() => void startDownload()}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-white text-[13px] font-medium rounded-lg transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  下载更新
+                  立即更新
                 </button>
                 <button
                   onClick={handleOpenRelease}
@@ -167,7 +262,76 @@ export function UpdateChecker() {
             </div>
           )}
 
-          {state === 'latest' && info && (
+          {status === 'downloading' && info && (
+            <div className="px-4 pb-4">
+              <div className="mb-3">
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className="text-[20px] font-bold text-[#f5f5f7] tracking-tight">
+                    v{info.latestVersion}
+                  </span>
+                  <span className="text-[11px] text-[#98989d] font-medium px-1.5 py-0.5 bg-white/[0.06] rounded-full">
+                    正在下载
+                  </span>
+                </div>
+                <p className="text-[12px] text-[#6e6e73]">
+                  更新正在后台下载，你可以继续使用应用。
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-background/60 p-3">
+                <div className="flex items-center justify-between text-[12px] text-[#a1a1a6] mb-2">
+                  <span>下载进度</span>
+                  <span>{progressPercent}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-[width] duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-[#6e6e73] mt-2">
+                  <span>
+                    {progress?.total
+                      ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)}`
+                      : formatBytes(progress?.transferred ?? 0)}
+                  </span>
+                  <span>{formatBytes(progress?.bytesPerSecond ?? 0)}/s</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {status === 'downloaded' && info && (
+            <div className="px-4 pb-4">
+              <div className="flex flex-col items-center py-3 text-center">
+                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
+                  <Download className="w-5 h-5 text-success" />
+                </div>
+                <p className="text-[13px] font-medium text-[#f5f5f7]">
+                  更新已下载完成
+                </p>
+                <p className="text-[12px] text-[#6e6e73] mt-0.5">
+                  点击安装后会退出当前进程并更新到 v{info.latestVersion}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => void installDownloadedUpdate()}
+                  className="flex-1 px-3 py-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-white text-[13px] font-medium rounded-lg transition-colors"
+                >
+                  安装并重启
+                </button>
+                <button
+                  onClick={handleOpenRelease}
+                  className="px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                >
+                  详情
+                </button>
+              </div>
+            </div>
+          )}
+
+          {status === 'latest' && info && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-3 text-center">
                 <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
@@ -189,26 +353,36 @@ export function UpdateChecker() {
             </div>
           )}
 
-          {state === 'error' && (
+          {status === 'error' && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-3 text-center">
                 <p className="text-[13px] text-[#ff453a] font-medium mb-1">
-                  检查失败
+                  更新失败
                 </p>
                 <p className="text-[12px] text-[#6e6e73]">
                   {error ?? '无法连接到 GitHub'}
                 </p>
               </div>
-              <button
-                onClick={check}
-                className="w-full px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
-              >
-                重试
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={check}
+                  className="flex-1 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                >
+                  重试
+                </button>
+                {info?.releaseUrl && (
+                  <button
+                    onClick={handleOpenRelease}
+                    className="px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                  >
+                    详情
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {state === 'checking' && (
+          {status === 'checking' && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-4 text-center">
                 <Loader2 className="w-6 h-6 text-primary animate-spin mb-2" />
