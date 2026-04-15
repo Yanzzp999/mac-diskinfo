@@ -14,14 +14,14 @@
     "build:electron": "tsc -p electron/tsconfig.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json"
   },
   "dependencies": {
-    "lucide-react": "^1.7.0",
-    "plist": "^3.1.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "recharts": "^3.8.1"
+    "plist": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "lucide-react": "^1.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
@@ -54,6 +54,11 @@
     "directories": {
       "output": "release"
     },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
     "publish": {
       "provider": "github",
       "owner": "Yanzzp999",
