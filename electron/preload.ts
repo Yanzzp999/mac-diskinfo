@@ -18,4 +18,7 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.off('disk-speed-update', listener);
     };
   },
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  openExternal: (url: string) => ipcRenderer.send('open-external', url),
 });

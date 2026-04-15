@@ -3,6 +3,7 @@ import type { DiskDevice, SmartReport } from './shared/types';
 import { DiskCard } from './components/DiskCard';
 import { SmartDetail } from './components/SmartDetail';
 import { HardDrive, RefreshCw } from 'lucide-react';
+import { UpdateChecker } from './components/UpdateChecker';
 import appIcon from './assets/app-icon.png';
 
 function getSmartHints(device: DiskDevice) {
@@ -83,15 +84,17 @@ function App() {
               mac-diskinfo
             </h1>
           </div>
-          <button
-            onClick={() => loadDisks(true)}
-            disabled={loading}
-            className="p-1.5 rounded-md hover:bg-white/[0.08] active:bg-white/[0.12] transition-colors disabled:opacity-40 disabled:cursor-not-allowed group"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 text-[#98989d] group-hover:text-[#f5f5f7] transition-colors ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <UpdateChecker />
+            <button
+              onClick={() => loadDisks(true)}
+              disabled={loading}
+              className="p-1.5 rounded-md hover:bg-white/[0.08] active:bg-white/[0.12] transition-colors disabled:opacity-40 disabled:cursor-not-allowed group"
+              title="Refresh"
+            >
+              <RefreshCw className={`w-4 h-4 text-[#98989d] group-hover:text-[#f5f5f7] transition-colors ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
       </header>
 

@@ -77,6 +77,16 @@ export interface DiskSpeedData {
   timestamp: number;
 }
 
+export interface UpdateInfo {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  releaseUrl: string;
+  downloadUrl: string | null;
+  releaseNotes: string;
+  publishedAt: string;
+}
+
 declare global {
   interface Window {
     electron: {
@@ -86,6 +96,9 @@ declare global {
       startDiskSpeedMonitor: (bsdName: string) => void;
       stopDiskSpeedMonitor: (bsdName: string) => void;
       onDiskSpeedUpdate: (callback: (data: DiskSpeedData) => void) => () => void;
+      checkForUpdates: () => Promise<UpdateInfo>;
+      getAppVersion: () => Promise<string>;
+      openExternal: (url: string) => void;
     }
   }
 }

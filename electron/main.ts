@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  shell,
   webContents,
   type Event,
   type RenderProcessGoneDetails,
@@ -12,6 +13,7 @@ import * as path from 'path';
 import { discoverDisks } from './services/discovery';
 import { getSmartReport, getTemperature } from './services/smart';
 import { createIoMonitor, type IoMonitorSession } from './services/iostat';
+import { checkForUpdates } from './services/updater';
 
 interface ActiveDiskSpeedMonitor {
   bsdName: string;
@@ -185,6 +187,18 @@ app.whenReady().then(() => {
 
   ipcMain.on('stop-disk-speed-monitor', (event, bsdName) => {
     stopMatchingDiskSpeedMonitor(event.sender.id, bsdName);
+  });
+
+  ipcMain.handle('check-for-updates', async () => {
+    return await checkForUpdates();
+  });
+
+  ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+  });
+
+  ipcMain.on('open-external', (_, url: string) => {
+    void shell.openExternal(url);
   });
 
   createWindow();
