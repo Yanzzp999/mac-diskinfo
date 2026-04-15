@@ -135,11 +135,73 @@ function getAtaHealthAssessment(report: SmartReport) {
   };
 }
 
-function getAtaHighlightAttributes(report: SmartReport) {
-  const highlightIds = new Set([5, 9, 10, 12, 193, 194, 196, 197, 198, 199]);
-  return (report.rawAttributes ?? [])
-    .filter((attribute) => highlightIds.has(attribute.id))
-    .sort((left, right) => left.id - right.id);
+function getHealthAssessment(report: SmartReport) {
+  if (report.protocol === 'nvme') {
+    if (report.healthPassed === false) {
+      return {
+        label: 'Bad',
+        accentClass: 'text-[#ff453a]',
+        panelClass: 'border-[#ff453a]/20 bg-[#ff453a]/8',
+        summary: 'NVMe health check failed. Back up this drive immediately.',
+      };
+    }
+    const cautionReasons: string[] = [];
+    if ((report.mediaErrors ?? 0) > 0) cautionReasons.push('media errors');
+    if ((report.percentageUsed ?? 0) >= 90) cautionReasons.push('high wear level');
+    if ((report.availableSpare ?? 100) <= 10) cautionReasons.push('low spare capacity');
+    if (cautionReasons.length > 0) {
+      return {
+        label: 'Caution',
+        accentClass: 'text-[#ff9f0a]',
+        panelClass: 'border-[#ff9f0a]/20 bg-[#ff9f0a]/8',
+        summary: `Warning: ${cautionReasons.join(', ')} detected.`,
+      };
+    }
+    return {
+      label: 'Good',
+      accentClass: 'text-[#32d74b]',
+      panelClass: 'border-[#32d74b]/20 bg-[#32d74b]/8',
+      summary: 'NVMe drive is operating normally with no critical warnings.',
+    };
+  }
+  return getAtaHealthAssessment(report);
+}
+
+type AttributeHealthStatus = 'ok' | 'warning' | 'danger';
+
+const CRITICAL_SURFACE_IDS = new Set([5, 196, 197, 198]);
+
+function getAttributeHealthStatus(attr: SmartAttribute): AttributeHealthStatus {
+  if (attr.value !== undefined && attr.threshold !== undefined && attr.threshold > 0 && attr.value <= attr.threshold) {
+    return 'danger';
+  }
+  if (CRITICAL_SURFACE_IDS.has(attr.id) && (attr.rawValue ?? 0) > 0) {
+    return 'warning';
+  }
+  if (attr.id === 199 && (attr.rawValue ?? 0) > 0) {
+    return 'warning';
+  }
+  return 'ok';
+}
+
+const ATTRIBUTE_ROW_CLASSES: Record<AttributeHealthStatus, string> = {
+  ok: '',
+  warning: 'bg-[#ff9f0a]/[0.06]',
+  danger: 'bg-[#ff453a]/[0.08]',
+};
+
+const ATTRIBUTE_DOT_CLASSES: Record<AttributeHealthStatus, string> = {
+  ok: 'bg-[#32d74b]',
+  warning: 'bg-[#ff9f0a]',
+  danger: 'bg-[#ff453a]',
+};
+
+const KEY_ATTRIBUTE_IDS = new Set([1, 3, 4, 5, 7, 9, 10, 12, 177, 187, 188, 193, 194, 196, 197, 198, 199, 233, 241, 242]);
+
+function getDisplayedAttributes(report: SmartReport, showAll: boolean) {
+  const all = [...(report.rawAttributes ?? [])].sort((a, b) => a.id - b.id);
+  if (showAll) return all;
+  return all.filter(attr => KEY_ATTRIBUTE_IDS.has(attr.id) || getAttributeHealthStatus(attr) !== 'ok');
 }
 
 export function SmartDetail({ device, report, loading }: SmartDetailProps) {
@@ -149,6 +211,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [speedHistory, setSpeedHistory] = useState<SpeedSample[]>(() => getCachedSpeedHistory(device.bsdName));
   const [showEma, setShowEma] = useState(false);
+  const [showAllAttributes, setShowAllAttributes] = useState(false);
   const [chartSeedTime] = useState(() => Date.now());
 
   useEffect(() => {
@@ -253,9 +316,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
   const isNVMe = device.transport.toUpperCase().includes('NVME') || device.transport.toUpperCase().includes('FABRIC') || device.transport.toUpperCase().includes('PCI');
   const diskType = device.isSolidState === false ? 'HDD' : (isNVMe ? 'NVMe' : 'SSD');
-  const isAtaHdd = report?.protocol === 'ata' && diskType === 'HDD';
-  const ataHealth = report ? getAtaHealthAssessment(report) : null;
-  const ataHighlightAttributes = report ? getAtaHighlightAttributes(report) : [];
+  const isAta = report?.protocol === 'ata';
+  const isAtaHdd = isAta && diskType === 'HDD';
+  const health = report?.readable ? getHealthAssessment(report) : null;
+  const displayedAttributes = report ? getDisplayedAttributes(report, showAllAttributes) : [];
 
   let TransportImg = ssdImg;
   if (diskType === 'HDD') TransportImg = hddImg;
@@ -290,8 +354,11 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
             <StatusBadge label={formatSize(device.sizeBytes)} type="default" />
             <StatusBadge label={device.transport} type="default" />
           </div>
-          {device.serial && (
-            <p className="text-xs text-[#6e6e73] mt-2 font-mono">S/N: {device.serial}</p>
+          {(device.serial || report?.firmwareVersion) && (
+            <div className="flex flex-wrap gap-x-4 mt-2">
+              {device.serial && <span className="text-xs text-[#6e6e73] font-mono">S/N: {device.serial}</span>}
+              {report?.firmwareVersion && <span className="text-xs text-[#6e6e73] font-mono">FW: {report.firmwareVersion}</span>}
+            </div>
           )}
           {!device.isInternal && (device.linkSpeed || device.bridgeChip) && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -496,131 +563,26 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
         </div>
       )}
 
-      {/* SMART Health Indicators */}
+      {/* SMART Health & Details */}
       {!loading && report && report.readable && (
         <>
-          {isAtaHdd && ataHealth ? (
-            <>
-              <div>
-                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
-                  <HeartPulse className="w-3.5 h-3.5" />
-                  Drive Snapshot
-                </h3>
-                <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1.9fr] gap-2">
-                  <div className={`rounded-lg border px-4 py-3 ${ataHealth.panelClass}`}>
-                    <div className="text-[11px] text-[#6e6e73]">Health Assessment</div>
-                    <div className={`mt-1.5 text-2xl font-semibold ${ataHealth.accentClass}`}>
-                      {ataHealth.label}
-                    </div>
-                    <p className="mt-1.5 text-[13px] text-[#a1a1a6] leading-5">
-                      {ataHealth.summary}
-                    </p>
+          <div>
+            <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+              <HeartPulse className="w-3.5 h-3.5" />
+              Drive Snapshot
+            </h3>
+            <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1.9fr] gap-2">
+              {health && (
+                <div className={`rounded-lg border px-4 py-3 ${health.panelClass}`}>
+                  <div className="text-[11px] text-[#6e6e73]">Health Assessment</div>
+                  <div className={`mt-1.5 text-2xl font-semibold ${health.accentClass}`}>
+                    {health.label}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <MetricCard
-                      icon={<Thermometer />}
-                      label="Temperature"
-                      value={currentTemp !== undefined && currentTemp !== null ? `${currentTemp}°C` : 'N/A'}
-                    />
-                    <MetricCard
-                      icon={<Shield />}
-                      label="SMART Status"
-                      value={report.healthPassed === undefined ? 'Unknown' : report.healthPassed ? 'Passed' : 'Failing'}
-                    />
-                    <MetricCard
-                      icon={<Clock />}
-                      label="Power On Hours"
-                      value={report.powerOnHours !== undefined ? report.powerOnHours.toLocaleString() : 'N/A'}
-                    />
-                    <MetricCard
-                      icon={<HardDrive />}
-                      label="Rotation Rate"
-                      value={report.rotationRateRpm !== undefined ? `${report.rotationRateRpm.toLocaleString()} RPM` : 'N/A'}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
-                  <TriangleAlert className="w-3.5 h-3.5" />
-                  Surface & Reliability
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <MetricCard icon={<AlertTriangle />} label="Reallocated Sectors" value={report.reallocatedSectors?.toLocaleString() ?? 'N/A'} />
-                  <MetricCard icon={<AlertTriangle />} label="Current Pending" value={report.currentPendingSectors?.toLocaleString() ?? 'N/A'} />
-                  <MetricCard icon={<AlertTriangle />} label="Offline Uncorrectable" value={report.offlineUncorrectable?.toLocaleString() ?? 'N/A'} />
-                  <MetricCard icon={<Cable />} label="UDMA CRC Errors" value={report.udmaCrcErrors?.toLocaleString() ?? 'N/A'} />
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5" />
-                  Mechanical Counters
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <MetricCard icon={<Zap />} label="Power Cycles" value={report.powerCycles?.toLocaleString() ?? 'N/A'} />
-                  <MetricCard icon={<Clock />} label="Start/Stop Count" value={report.startStopCount?.toLocaleString() ?? 'N/A'} />
-                  <MetricCard icon={<Activity />} label="Load/Unload Count" value={report.loadUnloadCount?.toLocaleString() ?? 'N/A'} />
-                  <MetricCard icon={<AlertTriangle />} label="Spin Retry Count" value={report.spinRetryCount?.toLocaleString() ?? 'N/A'} />
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5" />
-                  Interface & Media
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <MetricCard icon={<Cable />} label="Negotiated Link" value={report.interfaceSpeed ?? 'N/A'} />
-                  <MetricCard icon={<Cable />} label="SATA Version" value={report.sataVersion ?? 'N/A'} />
-                  <MetricCard icon={<Database />} label="Logical Sector" value={formatBlockSize(report.logicalSectorSize)} />
-                  <MetricCard icon={<Database />} label="Physical Sector" value={formatBlockSize(report.physicalSectorSize)} />
-                </div>
-              </div>
-
-              {ataHighlightAttributes.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-[#98989d] mb-2.5 flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5" />
-                    Key SMART Attributes
-                  </h3>
-                  <div className="rounded-lg border border-separator overflow-hidden">
-                    <table className="w-full text-[13px]">
-                      <thead>
-                        <tr className="bg-surface-hover text-[#6e6e73] text-xs">
-                          <th className="text-left py-2 px-3 font-medium w-14">ID</th>
-                          <th className="text-left py-2 px-3 font-medium">Attribute</th>
-                          <th className="text-right py-2 px-3 font-medium w-18">Current</th>
-                          <th className="text-right py-2 px-3 font-medium w-18">Worst</th>
-                          <th className="text-right py-2 px-3 font-medium w-18">Thresh</th>
-                          <th className="text-right py-2 px-3 font-medium w-28">Raw</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ataHighlightAttributes.map((attribute: SmartAttribute, index: number) => (
-                          <tr key={attribute.id} className={`border-t border-separator ${index % 2 === 0 ? '' : 'bg-white/[0.015]'}`}>
-                            <td className="py-2 px-3 text-[#a1a1a6] font-mono">{attribute.id}</td>
-                            <td className="py-2 px-3 text-[#e5e5ea]">{formatAttributeName(attribute.name)}</td>
-                            <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.value ?? '—'}</td>
-                            <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.worst ?? '—'}</td>
-                            <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.threshold ?? '—'}</td>
-                            <td className="py-2 px-3 text-right text-[#e5e5ea] font-mono">{attribute.rawString ?? attribute.rawValue ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <p className="mt-1.5 text-[13px] text-[#a1a1a6] leading-5">
+                    {health.summary}
+                  </p>
                 </div>
               )}
-            </>
-          ) : (
-            <div>
-              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
-                <HeartPulse className="w-3.5 h-3.5" />
-                Health Indicators
-              </h3>
               <div className="grid grid-cols-2 gap-2">
                 <MetricCard
                   icon={<Thermometer />}
@@ -637,11 +599,75 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                   label="Power On Hours"
                   value={report.powerOnHours !== undefined ? report.powerOnHours.toLocaleString() : 'N/A'}
                 />
-                <MetricCard
-                  icon={<Zap />}
-                  label="Power Cycles"
-                  value={report.powerCycles !== undefined ? report.powerCycles.toLocaleString() : 'N/A'}
-                />
+                {isAtaHdd ? (
+                  <MetricCard
+                    icon={<HardDrive />}
+                    label="Rotation Rate"
+                    value={report.rotationRateRpm !== undefined ? `${report.rotationRateRpm.toLocaleString()} RPM` : 'N/A'}
+                  />
+                ) : (
+                  <MetricCard
+                    icon={<Zap />}
+                    label="Power Cycles"
+                    value={report.powerCycles !== undefined ? report.powerCycles.toLocaleString() : 'N/A'}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {isAta && (report.reallocatedSectors !== undefined || report.currentPendingSectors !== undefined || report.offlineUncorrectable !== undefined || report.udmaCrcErrors !== undefined) && (
+            <div>
+              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                <TriangleAlert className="w-3.5 h-3.5" />
+                Surface & Reliability
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCard icon={<AlertTriangle />} label="Reallocated Sectors" value={report.reallocatedSectors?.toLocaleString() ?? 'N/A'} />
+                <MetricCard icon={<AlertTriangle />} label="Current Pending" value={report.currentPendingSectors?.toLocaleString() ?? 'N/A'} />
+                <MetricCard icon={<AlertTriangle />} label="Offline Uncorrectable" value={report.offlineUncorrectable?.toLocaleString() ?? 'N/A'} />
+                <MetricCard icon={<Cable />} label="UDMA CRC Errors" value={report.udmaCrcErrors?.toLocaleString() ?? 'N/A'} />
+              </div>
+            </div>
+          )}
+
+          {isAtaHdd && (
+            <div>
+              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5" />
+                Mechanical Counters
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricCard icon={<Zap />} label="Power Cycles" value={report.powerCycles?.toLocaleString() ?? 'N/A'} />
+                <MetricCard icon={<Clock />} label="Start/Stop Count" value={report.startStopCount?.toLocaleString() ?? 'N/A'} />
+                <MetricCard icon={<Activity />} label="Load/Unload Count" value={report.loadUnloadCount?.toLocaleString() ?? 'N/A'} />
+                <MetricCard icon={<AlertTriangle />} label="Spin Retry Count" value={report.spinRetryCount?.toLocaleString() ?? 'N/A'} />
+              </div>
+            </div>
+          )}
+
+          {(report.firmwareVersion || report.sataVersion || report.interfaceSpeed || report.logicalSectorSize) && (
+            <div>
+              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5" />
+                Device Information
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {report.firmwareVersion && (
+                  <MetricCard icon={<HardDrive />} label="Firmware" value={report.firmwareVersion} />
+                )}
+                {report.interfaceSpeed && (
+                  <MetricCard icon={<Cable />} label="Negotiated Link" value={report.interfaceSpeed} />
+                )}
+                {report.sataVersion && (
+                  <MetricCard icon={<Cable />} label="SATA Version" value={report.sataVersion} />
+                )}
+                {report.logicalSectorSize && (
+                  <MetricCard icon={<Database />} label="Logical Sector" value={formatBlockSize(report.logicalSectorSize)} />
+                )}
+                {report.physicalSectorSize && (
+                  <MetricCard icon={<Database />} label="Physical Sector" value={formatBlockSize(report.physicalSectorSize)} />
+                )}
               </div>
             </div>
           )}
@@ -668,11 +694,78 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                 Error Counters
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                <MetricCard icon={<AlertTriangle />} label="Unsafe Shutdowns" value={report.unsafeShutdowns?.toLocaleString() ?? 'N/A'} />
-                <MetricCard icon={<AlertTriangle />} label="Media Errors" value={report.mediaErrors?.toLocaleString() ?? 'N/A'} />
+                {report.unsafeShutdowns !== undefined && (
+                  <MetricCard icon={<AlertTriangle />} label="Unsafe Shutdowns" value={report.unsafeShutdowns.toLocaleString()} />
+                )}
+                {report.mediaErrors !== undefined && (
+                  <MetricCard icon={<AlertTriangle />} label="Media Errors" value={report.mediaErrors.toLocaleString()} />
+                )}
                 {report.errorLogEntries !== undefined && (
                   <MetricCard icon={<AlertTriangle />} label="Error Log Entries" value={report.errorLogEntries.toLocaleString()} />
                 )}
+              </div>
+            </div>
+          )}
+
+          {displayedAttributes.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-sm font-medium text-[#98989d] flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5" />
+                  SMART Attributes
+                  <span className="text-[11px] text-[#48484a] ml-1">
+                    {displayedAttributes.length} of {report.rawAttributes?.length ?? 0}
+                  </span>
+                </h3>
+                {(report.rawAttributes?.length ?? 0) > displayedAttributes.length || showAllAttributes ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllAttributes(prev => !prev)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                      showAllAttributes
+                        ? 'bg-primary/15 text-[#64d2ff] border border-primary/20'
+                        : 'bg-white/[0.04] text-[#6e6e73] border border-separator hover:text-[#a1a1a6] hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    {showAllAttributes ? 'Key Only' : 'Show All'}
+                  </button>
+                ) : null}
+              </div>
+              <div className="rounded-lg border border-separator overflow-hidden">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="bg-surface-hover text-[#6e6e73] text-xs">
+                      <th className="text-center py-2 px-1.5 font-medium w-7"></th>
+                      <th className="text-left py-2 px-3 font-medium w-14">ID</th>
+                      <th className="text-left py-2 px-3 font-medium">Attribute</th>
+                      <th className="text-right py-2 px-3 font-medium w-18">Current</th>
+                      <th className="text-right py-2 px-3 font-medium w-18">Worst</th>
+                      <th className="text-right py-2 px-3 font-medium w-18">Thresh</th>
+                      <th className="text-right py-2 px-3 font-medium w-28">Raw</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedAttributes.map((attribute: SmartAttribute, index: number) => {
+                      const status = getAttributeHealthStatus(attribute);
+                      return (
+                        <tr
+                          key={attribute.id}
+                          className={`border-t border-separator ${index % 2 === 0 ? '' : 'bg-white/[0.015]'} ${ATTRIBUTE_ROW_CLASSES[status]}`}
+                        >
+                          <td className="py-2 px-1.5 text-center">
+                            <span className={`inline-block w-2 h-2 rounded-full ${ATTRIBUTE_DOT_CLASSES[status]}`} />
+                          </td>
+                          <td className="py-2 px-3 text-[#a1a1a6] font-mono">{attribute.id}</td>
+                          <td className="py-2 px-3 text-[#e5e5ea]">{formatAttributeName(attribute.name)}</td>
+                          <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.value ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.worst ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.threshold ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-[#e5e5ea] font-mono">{attribute.rawString ?? attribute.rawValue ?? '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

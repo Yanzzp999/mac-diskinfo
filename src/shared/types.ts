@@ -42,6 +42,7 @@ export interface SmartReport {
   readable: boolean;
   protocol?: 'nvme' | 'ata' | 'unknown';
   smartctlDeviceType?: string;
+  firmwareVersion?: string;
   healthPassed?: boolean;
   temperatureC?: number;
   powerOnHours?: number;
