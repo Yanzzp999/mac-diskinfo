@@ -275,6 +275,10 @@ function parseSmartData(data: any, report: SmartReport) {
     report.readable = true;
   }
 
+  if (typeof data.firmware_version === 'string') {
+    report.firmwareVersion = data.firmware_version;
+  }
+
   if (!report.protocol) {
     report.protocol = 'unknown';
   }
