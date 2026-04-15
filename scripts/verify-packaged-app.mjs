@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import process from 'node:process';
+import plist from 'plist';
 
 const execFile = promisify(execFileCallback);
 const WORKDIR = process.cwd();
@@ -86,6 +87,48 @@ async function verifyBundledSmartctl(appBundlePath) {
   console.log('[verify] bundled smartctl is present and executable');
 }
 
+function extractLatestMacVersion(latestMacContent) {
+  const versionMatch = latestMacContent.match(/^version:\s*(.+)$/m);
+
+  if (!versionMatch?.[1]) {
+    throw new Error('Could not find a version field in release/latest-mac.yml');
+  }
+
+  return versionMatch[1].trim().replace(/^['"]|['"]$/g, '');
+}
+
+async function verifyPackagedVersion(appBundlePath) {
+  const infoPlistPath = path.join(appBundlePath, 'Contents', 'Info.plist');
+  const latestMacPath = path.join(RELEASE_DIR, 'latest-mac.yml');
+  const [infoPlistContent, latestMacContent] = await Promise.all([
+    readFile(infoPlistPath, 'utf8'),
+    readFile(latestMacPath, 'utf8'),
+  ]);
+
+  const infoPlist = plist.parse(infoPlistContent);
+  const appVersion = String(infoPlist.CFBundleShortVersionString ?? '').trim();
+  const latestMacVersion = extractLatestMacVersion(latestMacContent);
+  const expectedVersion = process.env.APP_VERSION?.trim();
+
+  if (!appVersion) {
+    throw new Error(`CFBundleShortVersionString is missing in ${infoPlistPath}`);
+  }
+
+  if (appVersion !== latestMacVersion) {
+    throw new Error(
+      `Packaged app version ${appVersion} does not match latest-mac.yml version ${latestMacVersion}`
+    );
+  }
+
+  if (expectedVersion && appVersion !== expectedVersion) {
+    throw new Error(
+      `Packaged app version ${appVersion} does not match expected APP_VERSION ${expectedVersion}`
+    );
+  }
+
+  console.log(`[verify] packaged version ${appVersion} matches latest-mac.yml`);
+}
+
 async function main() {
   const appBundlePath = await findPackagedApp();
   const profileDir = await mkdtemp(path.join(os.tmpdir(), 'mac-diskinfo-verify-profile-'));
@@ -93,6 +136,7 @@ async function main() {
 
   console.log(`[verify] launching ${appBundlePath}`);
   await verifyBundledSmartctl(appBundlePath);
+  await verifyPackagedVersion(appBundlePath);
 
   const openProcess = spawn('open', [
     '-na',

@@ -1,7 +1,7 @@
 {
   "name": "mac-diskinfo",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"npm run build:electron && electron .\"",
     "prepare:smartctl-bundle": "node scripts/prepare-smartctl-bundle.mjs",
-    "build": "npm run prepare:smartctl-bundle && tsc -b && vite build && npm run build:electron && electron-builder",
+    "build": "npm run prepare:smartctl-bundle && tsc -b && vite build && npm run build:electron && node scripts/run-electron-builder.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "build:electron": "tsc -p electron/tsconfig.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json",
