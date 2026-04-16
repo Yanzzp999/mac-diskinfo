@@ -127,7 +127,7 @@ function App() {
           )}
         </aside>
 
-        <main className="flex-1 overflow-hidden bg-background">
+        <main className="min-w-0 flex-1 overflow-hidden bg-background">
           {selectedDevice ? (
             <SmartDetail
               key={selectedDevice.id}

@@ -2,7 +2,7 @@ import type { DiskDevice, DiskSpeedData, SmartAttribute, SmartReport } from '../
 import { MetricCard } from './MetricCard';
 import { StatusBadge } from './StatusBadge';
 import { Thermometer, Activity, Clock, AlertTriangle, Database, Zap, HeartPulse, HardDrive, Shield, TriangleAlert, X, Cable } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import hddImg from '../assets/hdd-flat.svg';
 import ssdImg from '../assets/ssd-flat.svg';
 import nvmeImg from '../assets/nvme-flat.svg';
@@ -231,10 +231,12 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
   const [isWindowFocused, setIsWindowFocused] = useState(() => document.hasFocus());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const [speedHistory, setSpeedHistory] = useState<SpeedSample[]>(() => getCachedSpeedHistory(device.bsdName));
   const [showEma, setShowEma] = useState(false);
   const [showAllAttributes, setShowAllAttributes] = useState(false);
   const [chartSeedTime] = useState(() => Date.now());
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const handleFocus = () => {
@@ -251,6 +253,34 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
     return () => {
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  useEffect(() => {
+    const element = chartContainerRef.current;
+    if (!element) return;
+
+    const syncChartSize = () => {
+      const width = Math.max(0, Math.floor(element.clientWidth));
+      const height = Math.max(0, Math.floor(element.clientHeight));
+
+      setChartSize((prev) => (
+        prev.width === width && prev.height === height
+          ? prev
+          : { width, height }
+      ));
+    };
+
+    syncChartSize();
+
+    const observer = new ResizeObserver(() => {
+      syncChartSize();
+    });
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
     };
   }, []);
 
@@ -335,6 +365,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
     : clampAxisMax(observedMax * Y_AXIS_PADDING);
   const chartEnd = latestSample?.timestamp ?? chartSeedTime;
   const chartStart = chartEnd - SPEED_WINDOW_MS;
+  const canRenderSpeedChart = chartSize.width > 0 && chartSize.height > 0;
 
   const isNVMe = device.transport.toUpperCase().includes('NVME') || device.transport.toUpperCase().includes('FABRIC') || device.transport.toUpperCase().includes('PCI');
   const diskType = device.isSolidState === false ? 'HDD' : (isNVMe ? 'NVMe' : 'SSD');
@@ -361,7 +392,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-5">
+    <div className="h-full min-w-0 overflow-y-auto p-6 space-y-5">
       {/* Device Header */}
       <div className="flex items-center gap-5 pb-5 border-b border-separator">
         <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-[#3a3a3c]">
@@ -488,94 +519,101 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
             </div>
           </div>
 
-          <div className="relative h-64 w-full bg-surface rounded-lg border border-separator p-4 pl-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={speedHistory} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis 
-                  type="number"
-                  dataKey="timestamp"
-                  scale="time"
-                  domain={[chartStart, chartEnd]}
-                  stroke="#48484a" 
-                  fontSize={10} 
-                  tickMargin={10} 
-                  minTickGap={20}
-                  tickCount={6}
-                  tickFormatter={(value) => formatTimeLabel(Number(value))}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis 
-                  domain={[0, yAxisMax]}
-                  stroke="#48484a" 
-                  fontSize={10} 
-                  tickFormatter={(value) => formatRate(Number(value))}
-                  axisLine={false}
-                  tickLine={false}
-                  width={78}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1c1c1e', borderColor: '#3a3a3c', borderRadius: '8px', fontSize: '12px' }}
-                  itemStyle={{ padding: '2px 0' }}
-                  labelFormatter={(label) => `${formatTimeLabel(Number(label))} · ${(SPEED_SAMPLE_MS / 1000).toFixed(0)}s avg`}
-                  formatter={(value, name) => {
-                    const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
-                    return [formatRate(numericValue), String(name)];
-                  }}
-                  labelStyle={{ color: '#98989d', marginBottom: '4px' }}
-                  cursor={{ stroke: '#48484a', strokeDasharray: '4 4' }}
-                />
-                <Line 
-                  type="linear" 
-                  dataKey="readSpeed" 
-                  name="Read" 
-                  stroke="#32d74b" 
-                  strokeWidth={1.5} 
-                  dot={false}
-                  isAnimationActive={false}
-                  activeDot={{ r: 3, fill: '#32d74b', stroke: '#1c1c1e' }}
-                />
-                <Line 
-                  type="linear" 
-                  dataKey="writeSpeed" 
-                  name="Write" 
-                  stroke="#ff9f0a" 
-                  strokeWidth={1.5} 
-                  dot={false}
-                  isAnimationActive={false}
-                  activeDot={{ r: 3, fill: '#ff9f0a', stroke: '#1c1c1e' }}
-                />
-                {showEma && (
-                  <Line
-                    type="linear"
-                    dataKey="readEma"
-                    name="Read EMA"
-                    stroke="#30db5b"
-                    strokeOpacity={0.6}
-                    strokeWidth={1}
-                    strokeDasharray="4 4"
-                    dot={false}
-                    activeDot={false}
-                    isAnimationActive={false}
+          <div className="relative h-64 min-w-0 w-full bg-surface rounded-lg border border-separator p-4 pl-0">
+            <div ref={chartContainerRef} className="h-full w-full min-w-0">
+              {canRenderSpeedChart && (
+                <LineChart
+                  width={chartSize.width}
+                  height={chartSize.height}
+                  data={speedHistory}
+                  margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                  <XAxis 
+                    type="number"
+                    dataKey="timestamp"
+                    scale="time"
+                    domain={[chartStart, chartEnd]}
+                    stroke="#48484a" 
+                    fontSize={10} 
+                    tickMargin={10} 
+                    minTickGap={20}
+                    tickCount={6}
+                    tickFormatter={(value) => formatTimeLabel(Number(value))}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                )}
-                {showEma && (
-                  <Line
-                    type="linear"
-                    dataKey="writeEma"
-                    name="Write EMA"
-                    stroke="#ffd60a"
-                    strokeOpacity={0.6}
-                    strokeWidth={1}
-                    strokeDasharray="4 4"
-                    dot={false}
-                    activeDot={false}
-                    isAnimationActive={false}
+                  <YAxis 
+                    domain={[0, yAxisMax]}
+                    stroke="#48484a" 
+                    fontSize={10} 
+                    tickFormatter={(value) => formatRate(Number(value))}
+                    axisLine={false}
+                    tickLine={false}
+                    width={78}
                   />
-                )}
-              </LineChart>
-            </ResponsiveContainer>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1c1c1e', borderColor: '#3a3a3c', borderRadius: '8px', fontSize: '12px' }}
+                    itemStyle={{ padding: '2px 0' }}
+                    labelFormatter={(label) => `${formatTimeLabel(Number(label))} · ${(SPEED_SAMPLE_MS / 1000).toFixed(0)}s avg`}
+                    formatter={(value, name) => {
+                      const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
+                      return [formatRate(numericValue), String(name)];
+                    }}
+                    labelStyle={{ color: '#98989d', marginBottom: '4px' }}
+                    cursor={{ stroke: '#48484a', strokeDasharray: '4 4' }}
+                  />
+                  <Line 
+                    type="linear" 
+                    dataKey="readSpeed" 
+                    name="Read" 
+                    stroke="#32d74b" 
+                    strokeWidth={1.5} 
+                    dot={false}
+                    isAnimationActive={false}
+                    activeDot={{ r: 3, fill: '#32d74b', stroke: '#1c1c1e' }}
+                  />
+                  <Line 
+                    type="linear" 
+                    dataKey="writeSpeed" 
+                    name="Write" 
+                    stroke="#ff9f0a" 
+                    strokeWidth={1.5} 
+                    dot={false}
+                    isAnimationActive={false}
+                    activeDot={{ r: 3, fill: '#ff9f0a', stroke: '#1c1c1e' }}
+                  />
+                  {showEma && (
+                    <Line
+                      type="linear"
+                      dataKey="readEma"
+                      name="Read EMA"
+                      stroke="#30db5b"
+                      strokeOpacity={0.6}
+                      strokeWidth={1}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {showEma && (
+                    <Line
+                      type="linear"
+                      dataKey="writeEma"
+                      name="Write EMA"
+                      stroke="#ffd60a"
+                      strokeOpacity={0.6}
+                      strokeWidth={1}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                </LineChart>
+              )}
+            </div>
             {speedHistory.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-[#6e6e73] pointer-events-none">
                 Collecting 2s disk activity samples...

@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"npm run build:electron && electron .\"",
+    "dev": "concurrently -k \"vite\" \"npm run build:electron && env -u ELECTRON_RUN_AS_NODE electron .\"",
     "prepare:smartctl-bundle": "node scripts/prepare-smartctl-bundle.mjs",
     "build": "npm run prepare:smartctl-bundle && tsc -b && vite build && npm run build:electron && node scripts/run-electron-builder.mjs",
     "lint": "eslint .",

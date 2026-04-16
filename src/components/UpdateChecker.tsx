@@ -15,17 +15,22 @@ export function UpdateChecker() {
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const check = useCallback(async () => {
+  const check = useCallback(async (openPopoverOnFailure = true) => {
     try {
       const result = await window.electron.checkForUpdates();
       setUpdateState(result);
+      if (openPopoverOnFailure && result.status === 'error') {
+        setPopoverOpen(true);
+      }
     } catch (e) {
       setUpdateState((prev) => ({
         ...prev,
         status: 'error',
         error: e instanceof Error ? e.message : 'Unknown error',
       }));
-      setPopoverOpen(true);
+      if (openPopoverOnFailure) {
+        setPopoverOpen(true);
+      }
     }
   }, []);
 
@@ -66,7 +71,9 @@ export function UpdateChecker() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(check, 3000);
+    const timer = setTimeout(() => {
+      void check(false);
+    }, 3000);
     return () => clearTimeout(timer);
   }, [check]);
 
@@ -103,8 +110,7 @@ export function UpdateChecker() {
   useEffect(() => {
     if (
       updateState.status === 'available' ||
-      updateState.status === 'downloaded' ||
-      updateState.status === 'error'
+      updateState.status === 'downloaded'
     ) {
       setPopoverOpen(true);
     }
@@ -204,7 +210,7 @@ export function UpdateChecker() {
               : status === 'latest'
                 ? '已是最新版本'
                 : status === 'error'
-                  ? '更新失败，点击查看详情'
+                  ? '更新检查暂时不可用，点击查看详情'
                   : '检查更新'
         }
       >
@@ -369,7 +375,7 @@ export function UpdateChecker() {
                 </p>
               </div>
               <button
-                onClick={check}
+                onClick={() => void check(true)}
                 className="w-full px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
               >
                 重新检查
@@ -389,7 +395,7 @@ export function UpdateChecker() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={check}
+                  onClick={() => void check(true)}
                   className="flex-1 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
                 >
                   重试

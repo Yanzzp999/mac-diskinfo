@@ -1,6 +1,11 @@
 name: Build and Release Mac App
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: '指定版本号 (例如: 1.0.1)。如果留空，将自动生成新版本号。'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -42,7 +47,22 @@ jobs:
 
       - name: Determine Release Version
         id: release_version
-        run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          
+          if [ -n "$INPUT_VERSION" ]; then
+            # 如果手动指定了版本号，则使用该版本号
+            FINAL_VERSION=$INPUT_VERSION
+          else
+            # 如果没有指定，则在 package.json 版本号后追加 GitHub 运行编号作为新版本号
+            FINAL_VERSION="${PKG_VERSION}-build.${{ github.run_number }}"
+          fi
+          
+          # 更新 package.json 中的版本号，以便 electron-builder 使用新版本打包
+          npm version "$FINAL_VERSION" --no-git-tag-version
+          
+          echo "version=$FINAL_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build App
         run: npm run build

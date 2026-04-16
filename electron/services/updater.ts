@@ -17,6 +17,7 @@ const GITHUB_REPO = 'mac-diskinfo';
 const API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 const RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 const UPDATE_STATE_CHANGE_EVENT = 'update-state-change';
+const UPDATE_CHECK_DEDUPE_MS = 15_000;
 
 type UpdateStateListener = (state: UpdateState) => void;
 
@@ -42,6 +43,7 @@ let checkPromise: Promise<UpdateState> | null = null;
 let downloadPromise: Promise<UpdateState> | null = null;
 let promptedDownloadedVersion: string | null = null;
 let downloadRequested = false;
+let lastCheckFinishedAt = 0;
 
 function parseVersion(tag: string): number[] {
   return tag.replace(/^v/, '').split('.').map(Number);
@@ -93,6 +95,22 @@ function setState(next: Partial<UpdateState>) {
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return String(error);
+}
+
+function extractGithubErrorMessage(rawText: string): string {
+  const normalized = rawText.trim();
+  if (!normalized) return '';
+
+  try {
+    const parsed = JSON.parse(normalized) as { message?: unknown };
+    if (typeof parsed.message === 'string' && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    // Fall back to the raw response body when GitHub does not return JSON.
+  }
+
+  return normalized;
 }
 
 function buildReleaseUrl(version: string): string {
@@ -189,7 +207,9 @@ async function fetchGithubReleaseInfo(): Promise<SharedUpdateInfo> {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub API returned ${response.status}: ${response.statusText}`);
+    const details = extractGithubErrorMessage(await response.text());
+    const suffix = details || response.statusText;
+    throw new Error(`GitHub API returned ${response.status}: ${suffix}`);
   }
 
   const release = (await response.json()) as GithubReleaseResponse;
@@ -217,6 +237,16 @@ function isMissingUpdateMetadataError(error: unknown) {
   return message.includes('latest-mac.yml') && (message.includes('404') || message.includes('cannot find'));
 }
 
+function isGithubApiForbiddenError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return message.includes('github api returned 403');
+}
+
+function isGithubRateLimitError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return isGithubApiForbiddenError(error) && message.includes('rate limit');
+}
+
 function toManualDownloadInfo(info: SharedUpdateInfo): SharedUpdateInfo {
   return {
     ...info,
@@ -228,6 +258,14 @@ function toManualDownloadInfo(info: SharedUpdateInfo): SharedUpdateInfo {
 function createUserFacingUpdateError(error: unknown) {
   if (isMissingUpdateMetadataError(error)) {
     return new Error('当前 GitHub Release 缺少自动更新文件，请先手动下载安装本次更新。');
+  }
+
+  if (isGithubRateLimitError(error)) {
+    return new Error('GitHub 当前限制了匿名更新检查，请稍后重试，或打开发布页手动查看。');
+  }
+
+  if (isGithubApiForbiddenError(error)) {
+    return new Error('GitHub 暂时拒绝了本次更新检查，请稍后重试，或打开发布页手动查看。');
   }
 
   return new Error(getErrorMessage(error));
@@ -345,6 +383,11 @@ export function onUpdateStateChange(listener: UpdateStateListener) {
 export async function checkForUpdates(): Promise<UpdateState> {
   if (checkPromise) return checkPromise;
 
+  const now = Date.now();
+  if (currentState.status !== 'idle' && now - lastCheckFinishedAt < UPDATE_CHECK_DEDUPE_MS) {
+    return snapshotState();
+  }
+
   checkPromise = (async () => {
     const currentVersion = app.getVersion();
 
@@ -365,13 +408,14 @@ export async function checkForUpdates(): Promise<UpdateState> {
         });
         return snapshotState();
       } catch (error) {
+        const userFacingError = createUserFacingUpdateError(error);
         setState({
           status: 'error',
           info: buildFallbackInfo(currentVersion),
           progress: null,
-          error: getErrorMessage(error),
+          error: userFacingError.message,
         });
-        throw error instanceof Error ? error : new Error(getErrorMessage(error));
+        return snapshotState();
       }
     }
 
@@ -422,6 +466,7 @@ export async function checkForUpdates(): Promise<UpdateState> {
       throw createUserFacingUpdateError(error);
     }
   })().finally(() => {
+    lastCheckFinishedAt = Date.now();
     checkPromise = null;
   });
 
