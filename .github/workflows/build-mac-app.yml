@@ -129,7 +129,12 @@ jobs:
           title="Release $version"
           notes_file="$RUNNER_TEMP/release-notes.md"
 
-          mapfile -t release_files <<< "$RELEASE_FILES"
+          release_files=()
+          while IFS= read -r line; do
+            if [[ -n "$line" ]]; then
+              release_files+=("$line")
+            fi
+          done <<< "$RELEASE_FILES"
           if (( ${#release_files[@]} == 0 )); then
             echo "No release files collected for upload" >&2
             exit 1
