@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUpCircle, Download, ExternalLink, X, Loader2 } from 'lucide-react';
+import { ArrowUpCircle, Download, ExternalLink, X, Loader2 } from './MaterialIcons';
 import type { UpdateState } from '../shared/types';
 
 const INITIAL_UPDATE_STATE: UpdateState = {
@@ -386,7 +386,7 @@ export function UpdateChecker() {
           {status === 'error' && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-3 text-center">
-                <p className="text-[13px] text-[#ff453a] font-medium mb-1">
+                <p className="text-[13px] text-[#EA4335] font-medium mb-1">
                   更新失败
                 </p>
                 <p className="text-[12px] text-[#6e6e73]">

@@ -15,8 +15,19 @@ const BUNDLED_SMARTCTL_DIR = IS_ELECTRON_RUNTIME && process.resourcesPath
 const BUNDLED_DRIVEDB_PATH = IS_ELECTRON_RUNTIME && process.resourcesPath
   ? path.join(process.resourcesPath, 'smartmontools', 'share', 'smartmontools', 'drivedb.h')
   : null;
+const PROJECT_SMARTMONTOOLS_DIRS = [
+  path.join(process.cwd(), 'build-resources', 'smartmontools'),
+  path.join(__dirname, '..', '..', '..', 'build-resources', 'smartmontools'),
+];
+const PROJECT_SMARTCTL_DIRS = PROJECT_SMARTMONTOOLS_DIRS.map((directory) =>
+  path.join(directory, 'bin')
+);
+const PROJECT_DRIVEDB_PATHS = PROJECT_SMARTMONTOOLS_DIRS.map((directory) =>
+  path.join(directory, 'share', 'smartmontools', 'drivedb.h')
+);
 const SMARTCTL_CANDIDATE_PATHS = [
   ...(BUNDLED_SMARTCTL_DIR ? [path.join(BUNDLED_SMARTCTL_DIR, 'smartctl')] : []),
+  ...PROJECT_SMARTCTL_DIRS.map((directory) => path.join(directory, 'smartctl')),
   '/opt/homebrew/bin/smartctl',
   '/opt/homebrew/sbin/smartctl',
   '/usr/local/bin/smartctl',
@@ -25,6 +36,7 @@ const SMARTCTL_CANDIDATE_PATHS = [
 ];
 const SMARTCTL_FALLBACK_PATH_ENTRIES = [
   ...(BUNDLED_SMARTCTL_DIR ? [BUNDLED_SMARTCTL_DIR] : []),
+  ...PROJECT_SMARTCTL_DIRS,
   '/opt/homebrew/bin',
   '/opt/homebrew/sbin',
   '/usr/local/bin',
@@ -32,6 +44,7 @@ const SMARTCTL_FALLBACK_PATH_ENTRIES = [
 ];
 const DRIVEDB_CANDIDATE_PATHS = [
   ...(BUNDLED_DRIVEDB_PATH ? [BUNDLED_DRIVEDB_PATH] : []),
+  ...PROJECT_DRIVEDB_PATHS,
   '/opt/homebrew/share/smartmontools/drivedb.h',
   '/opt/homebrew/opt/smartmontools/share/smartmontools/drivedb.h',
   '/usr/local/share/smartmontools/drivedb.h',

@@ -1,7 +1,7 @@
 import type { DiskDevice, DiskSpeedData, SmartAttribute, SmartReport } from '../shared/types';
 import { MetricCard } from './MetricCard';
 import { StatusBadge } from './StatusBadge';
-import { Thermometer, Activity, Clock, AlertTriangle, Database, Zap, HeartPulse, HardDrive, Shield, TriangleAlert, X, Cable } from 'lucide-react';
+import { Thermometer, Activity, Clock, AlertTriangle, Database, Zap, HeartPulse, HardDrive, Shield, TriangleAlert, X, Cable } from './MaterialIcons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import hddImg from '../assets/hdd-flat.svg';
 import ssdImg from '../assets/ssd-flat.svg';
@@ -98,8 +98,8 @@ function getAtaHealthAssessment(report: SmartReport) {
   if (report.healthPassed === false) {
     return {
       label: 'Bad',
-      accentClass: 'text-[#ff453a]',
-      panelClass: 'border-[#ff453a]/20 bg-[#ff453a]/8',
+      accentClass: 'text-[#EA4335]',
+      panelClass: 'border-[#EA4335]/20 bg-[#EA4335]/8',
       summary: 'SMART self-assessment failed. Back up this drive as soon as possible.',
     };
   }
@@ -112,8 +112,8 @@ function getAtaHealthAssessment(report: SmartReport) {
   if (cautionReasons.length > 0) {
     return {
       label: 'Caution',
-      accentClass: 'text-[#ff9f0a]',
-      panelClass: 'border-[#ff9f0a]/20 bg-[#ff9f0a]/8',
+      accentClass: 'text-[#FBBC04]',
+      panelClass: 'border-[#FBBC04]/20 bg-[#FBBC04]/8',
       summary: `Surface warning: ${cautionReasons.join(', ')} detected.`,
     };
   }
@@ -121,16 +121,16 @@ function getAtaHealthAssessment(report: SmartReport) {
   if ((report.udmaCrcErrors ?? 0) > 0) {
     return {
       label: 'Attention',
-      accentClass: 'text-[#64d2ff]',
-      panelClass: 'border-[#64d2ff]/20 bg-[#64d2ff]/8',
+      accentClass: 'text-[#4285F4]',
+      panelClass: 'border-[#4285F4]/20 bg-[#4285F4]/8',
       summary: 'Disk surface looks healthy, but the link has recorded CRC/interface errors.',
     };
   }
 
   return {
     label: 'Good',
-    accentClass: 'text-[#32d74b]',
-    panelClass: 'border-[#32d74b]/20 bg-[#32d74b]/8',
+    accentClass: 'text-[#34A853]',
+    panelClass: 'border-[#34A853]/20 bg-[#34A853]/8',
     summary: 'No critical HDD SMART warning attributes are currently elevated.',
   };
 }
@@ -140,8 +140,8 @@ function getHealthAssessment(report: SmartReport) {
     if (report.healthPassed === false) {
       return {
         label: 'Bad',
-        accentClass: 'text-[#ff453a]',
-        panelClass: 'border-[#ff453a]/20 bg-[#ff453a]/8',
+        accentClass: 'text-[#EA4335]',
+        panelClass: 'border-[#EA4335]/20 bg-[#EA4335]/8',
         summary: 'NVMe health check failed. Back up this drive immediately.',
       };
     }
@@ -152,15 +152,15 @@ function getHealthAssessment(report: SmartReport) {
     if (cautionReasons.length > 0) {
       return {
         label: 'Caution',
-        accentClass: 'text-[#ff9f0a]',
-        panelClass: 'border-[#ff9f0a]/20 bg-[#ff9f0a]/8',
+        accentClass: 'text-[#FBBC04]',
+        panelClass: 'border-[#FBBC04]/20 bg-[#FBBC04]/8',
         summary: `Warning: ${cautionReasons.join(', ')} detected.`,
       };
     }
     return {
       label: 'Good',
-      accentClass: 'text-[#32d74b]',
-      panelClass: 'border-[#32d74b]/20 bg-[#32d74b]/8',
+      accentClass: 'text-[#34A853]',
+      panelClass: 'border-[#34A853]/20 bg-[#34A853]/8',
       summary: 'NVMe drive is operating normally with no critical warnings.',
     };
   }
@@ -186,14 +186,14 @@ function getAttributeHealthStatus(attr: SmartAttribute): AttributeHealthStatus {
 
 const ATTRIBUTE_ROW_CLASSES: Record<AttributeHealthStatus, string> = {
   ok: '',
-  warning: 'bg-[#ff9f0a]/[0.06]',
-  danger: 'bg-[#ff453a]/[0.08]',
+  warning: 'bg-[#FBBC04]/[0.06]',
+  danger: 'bg-[#EA4335]/[0.08]',
 };
 
 const ATTRIBUTE_DOT_CLASSES: Record<AttributeHealthStatus, string> = {
-  ok: 'bg-[#32d74b]',
-  warning: 'bg-[#ff9f0a]',
-  danger: 'bg-[#ff453a]',
+  ok: 'bg-[#34A853]',
+  warning: 'bg-[#FBBC04]',
+  danger: 'bg-[#EA4335]',
 };
 
 const KEY_ATTRIBUTE_IDS = new Set([1, 3, 4, 5, 7, 9, 10, 12, 177, 187, 188, 193, 194, 196, 197, 198, 199, 233, 241, 242]);
@@ -416,9 +416,9 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
           {!device.isInternal && (device.linkSpeed || device.bridgeChip) && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {device.linkSpeed && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#5e5ce6]/10 border border-[#5e5ce6]/15">
-                  <Cable className="w-3 h-3 text-[#bf5af2]" />
-                  <span className="text-[11px] font-medium text-[#bf5af2]">
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#4285F4]/10 border border-[#4285F4]/15">
+                  <Cable className="w-3 h-3 text-[#4285F4]" />
+                  <span className="text-[11px] font-medium text-[#4285F4]">
                     {device.linkSpeed}
                   </span>
                 </div>
@@ -454,11 +454,11 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       )}
 
       {!loading && report && !report.readable && !errorDismissed && (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-[#ff453a]/8 border border-[#ff453a]/15 relative">
-          <AlertTriangle className="w-5 h-5 text-[#ff453a] flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-[#EA4335]/8 border border-[#EA4335]/15 relative">
+          <AlertTriangle className="w-5 h-5 text-[#EA4335] flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h4 className="font-semibold text-[#ff453a]">SMART Data Unavailable</h4>
-            <p className="text-sm mt-1 text-[#ff453a]/70">{report.failureReason}</p>
+            <h4 className="font-semibold text-[#EA4335]">SMART Data Unavailable</h4>
+            <p className="text-sm mt-1 text-[#EA4335]/70">{report.failureReason}</p>
             <p className="text-xs mt-2 text-[#6e6e73]">
               {getSmartUnavailableHint(device, report)}
             </p>
@@ -488,7 +488,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
               onClick={() => setShowEma(prev => !prev)}
               className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
                 showEma
-                  ? 'bg-primary/15 text-[#64d2ff] border border-primary/20'
+                  ? 'bg-primary/15 text-[#4285F4] border border-primary/20'
                   : 'bg-white/[0.04] text-[#6e6e73] border border-separator hover:text-[#a1a1a6] hover:bg-white/[0.06]'
               }`}
             >
@@ -497,15 +497,15 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
           </div>
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
-            <div className="rounded-lg border border-[#32d74b]/15 bg-[#32d74b]/6 px-3.5 py-2.5">
-              <div className="text-[11px] text-[#32d74b]/70">Read Now</div>
-              <div className="mt-0.5 text-base font-semibold text-[#32d74b] font-mono">
+            <div className="rounded-lg border border-[#34A853]/15 bg-[#34A853]/6 px-3.5 py-2.5">
+              <div className="text-[11px] text-[#34A853]/70">Read Now</div>
+              <div className="mt-0.5 text-base font-semibold text-[#34A853] font-mono">
                 {latestSample ? formatRate(latestSample.readSpeed) : 'Collecting...'}
               </div>
             </div>
-            <div className="rounded-lg border border-[#ff9f0a]/15 bg-[#ff9f0a]/6 px-3.5 py-2.5">
-              <div className="text-[11px] text-[#ff9f0a]/70">Write Now</div>
-              <div className="mt-0.5 text-base font-semibold text-[#ff9f0a] font-mono">
+            <div className="rounded-lg border border-[#FBBC04]/15 bg-[#FBBC04]/6 px-3.5 py-2.5">
+              <div className="text-[11px] text-[#FBBC04]/70">Write Now</div>
+              <div className="mt-0.5 text-base font-semibold text-[#FBBC04] font-mono">
                 {latestSample ? formatRate(latestSample.writeSpeed) : 'Collecting...'}
               </div>
             </div>
@@ -567,21 +567,21 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                     type="linear" 
                     dataKey="readSpeed" 
                     name="Read" 
-                    stroke="#32d74b" 
+                    stroke="#34A853" 
                     strokeWidth={1.5} 
                     dot={false}
                     isAnimationActive={false}
-                    activeDot={{ r: 3, fill: '#32d74b', stroke: '#1c1c1e' }}
+                    activeDot={{ r: 3, fill: '#34A853', stroke: '#1c1c1e' }}
                   />
                   <Line 
                     type="linear" 
                     dataKey="writeSpeed" 
                     name="Write" 
-                    stroke="#ff9f0a" 
+                    stroke="#FBBC04" 
                     strokeWidth={1.5} 
                     dot={false}
                     isAnimationActive={false}
-                    activeDot={{ r: 3, fill: '#ff9f0a', stroke: '#1c1c1e' }}
+                    activeDot={{ r: 3, fill: '#FBBC04', stroke: '#1c1c1e' }}
                   />
                   {showEma && (
                     <Line
@@ -783,7 +783,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                     onClick={() => setShowAllAttributes(prev => !prev)}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
                       showAllAttributes
-                        ? 'bg-primary/15 text-[#64d2ff] border border-primary/20'
+                        ? 'bg-primary/15 text-[#4285F4] border border-primary/20'
                         : 'bg-white/[0.04] text-[#6e6e73] border border-separator hover:text-[#a1a1a6] hover:bg-white/[0.06]'
                     }`}
                   >
@@ -870,7 +870,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                               className="h-full rounded-full"
                               style={{ 
                                 width: `${Math.min(100, Math.max(0, (vol.capacityUsed / vol.sizeBytes) * 100))}%`,
-                                backgroundColor: ((vol.capacityUsed / vol.sizeBytes) * 100) > 90 ? '#ff453a' : '#007AFF'
+                                backgroundColor: ((vol.capacityUsed / vol.sizeBytes) * 100) > 90 ? '#EA4335' : '#4285F4'
                               }}
                             />
                           </div>

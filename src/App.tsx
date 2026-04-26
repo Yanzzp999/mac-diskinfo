@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DiskDevice, SmartReport } from './shared/types';
 import { DiskCard } from './components/DiskCard';
 import { SmartDetail } from './components/SmartDetail';
-import { HardDrive, RefreshCw } from 'lucide-react';
+import { HardDrive, RefreshCw } from './components/MaterialIcons';
 import { UpdateChecker } from './components/UpdateChecker';
-import appIcon from './assets/app-icon.png';
+import appIcon from './assets/app-icon.svg';
 
 function getSmartHints(device: DiskDevice) {
   return {

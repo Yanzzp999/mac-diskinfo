@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-labelledby="app-icon-title">
+  <title id="app-icon-title">mac-diskinfo</title>
+  <rect x="96" y="96" width="832" height="832" rx="214" fill="#F8FAFD"/>
+  <rect x="108" y="108" width="808" height="808" rx="202" stroke="#DADCE0" stroke-width="24"/>
+  <circle cx="512" cy="530" r="248" fill="#4285F4"/>
+  <path d="M512 196A334 334 0 0 1 808 374" stroke="#4285F4" stroke-width="86" stroke-linecap="round"/>
+  <path d="M808 374A334 334 0 0 1 748 722" stroke="#34A853" stroke-width="86" stroke-linecap="round"/>
+  <path d="M748 722A334 334 0 0 1 352 782" stroke="#FBBC04" stroke-width="86" stroke-linecap="round"/>
+  <path d="M352 782A334 334 0 0 1 512 196" stroke="#EA4335" stroke-width="86" stroke-linecap="round"/>
+  <circle cx="512" cy="530" r="150" fill="#1A73E8"/>
+  <circle cx="512" cy="530" r="88" fill="#F8FAFD"/>
+  <path d="M574 592L696 714" stroke="#F8FAFD" stroke-width="66" stroke-linecap="round"/>
+  <circle cx="512" cy="530" r="108" stroke="#F8FAFD" stroke-width="46"/>
+  <rect x="414" y="340" width="196" height="34" rx="17" fill="#F8FAFD" fill-opacity="0.86"/>
+</svg>

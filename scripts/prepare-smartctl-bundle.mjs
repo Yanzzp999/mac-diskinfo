@@ -5,6 +5,11 @@ import process from 'node:process';
 
 const WORKDIR = process.cwd();
 const OUTPUT_DIR = path.join(WORKDIR, 'build-resources', 'smartmontools');
+const EXISTING_BUNDLE_PATHS = {
+  smartctl: path.join(OUTPUT_DIR, 'bin', 'smartctl'),
+  driveDb: path.join(OUTPUT_DIR, 'share', 'smartmontools', 'drivedb.h'),
+  license: path.join(OUTPUT_DIR, 'licenses', 'smartmontools-COPYING.txt'),
+};
 const SMARTCTL_CANDIDATE_PATHS = [
   '/opt/homebrew/bin/smartctl',
   '/opt/homebrew/sbin/smartctl',
@@ -16,12 +21,14 @@ function resolveSmartctlBinary() {
   const smartctlPath = SMARTCTL_CANDIDATE_PATHS.find((candidate) => existsSync(candidate));
 
   if (!smartctlPath) {
-    throw new Error(
-      'smartctl not found on the build machine. Install smartmontools first, for example: brew install smartmontools'
-    );
+    return null;
   }
 
   return smartctlPath;
+}
+
+function hasExistingBundle() {
+  return Object.values(EXISTING_BUNDLE_PATHS).every((candidate) => existsSync(candidate));
 }
 
 function getBrewPrefix(smartctlPath) {
@@ -55,6 +62,18 @@ async function resolveSupplementalFiles(smartctlPath) {
 
 async function main() {
   const smartctlPath = resolveSmartctlBinary();
+
+  if (!smartctlPath) {
+    if (hasExistingBundle()) {
+      console.log(`[prepare-smartctl-bundle] using existing bundle at ${OUTPUT_DIR}`);
+      return;
+    }
+
+    throw new Error(
+      'smartctl not found on the build machine. Install smartmontools first, for example: brew install smartmontools'
+    );
+  }
+
   const { driveDbPath, licensePath } = await resolveSupplementalFiles(smartctlPath);
 
   await rm(OUTPUT_DIR, { recursive: true, force: true });

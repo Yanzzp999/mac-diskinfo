@@ -9,10 +9,10 @@ interface StatusBadgeProps {
 export function StatusBadge({ label, type = 'default', className = '' }: StatusBadgeProps) {
   const baseClasses = "px-2 py-0.5 rounded-full text-[11px] font-normal border";
   const typeClasses = {
-    success: "bg-[#32d74b]/10 text-[#32d74b] border-[#32d74b]/15",
-    warning: "bg-[#ff9f0a]/10 text-[#ff9f0a] border-[#ff9f0a]/15",
-    danger: "bg-[#ff453a]/10 text-[#ff453a] border-[#ff453a]/15",
-    info: "bg-[#007AFF]/10 text-[#64d2ff] border-[#007AFF]/15",
+    success: "bg-[#34A853]/10 text-[#34A853] border-[#34A853]/15",
+    warning: "bg-[#FBBC04]/10 text-[#FBBC04] border-[#FBBC04]/15",
+    danger: "bg-[#EA4335]/10 text-[#EA4335] border-[#EA4335]/15",
+    info: "bg-[#4285F4]/10 text-[#4285F4] border-[#4285F4]/15",
     default: "bg-white/[0.04] text-[#a1a1a6] border-white/[0.06]"
   };
 
