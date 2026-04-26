@@ -29,18 +29,20 @@ export function DiskCard({ device, selected, onClick }: DiskCardProps) {
       onClick={onClick}
       aria-pressed={selected}
       aria-label={`${device.displayName}, ${formatSize(device.sizeBytes)}, ${diskType}, ${device.smartStatus || 'SMART status unknown'}`}
-      className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-lg text-left transition-colors duration-150
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar
+      className={`group w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-left border transition-colors duration-150
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar
         ${selected
-          ? 'bg-[#3a3a3c]'
-          : 'hover:bg-white/[0.04]'
+          ? 'bg-primary-soft border-primary/25'
+          : 'bg-transparent border-transparent hover:bg-surface hover:border-separator'
         }`}
     >
-      <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-[#3a3a3c]">
+      <div className={`flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border transition-colors ${
+        selected ? 'bg-surface border-primary/20' : 'bg-fill border-transparent group-hover:border-separator'
+      }`}>
         <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-contain select-none" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className={`text-[13px] font-medium truncate ${selected ? 'text-[#f5f5f7]' : 'text-[#e5e5ea]'}`}>
+        <h3 className={`text-[13px] font-semibold truncate ${selected ? 'text-primary' : 'text-foreground'}`}>
           {device.displayName}
         </h3>
         <div className="flex flex-wrap gap-1 mt-1">

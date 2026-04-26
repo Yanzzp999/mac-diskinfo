@@ -98,8 +98,8 @@ function getAtaHealthAssessment(report: SmartReport) {
   if (report.healthPassed === false) {
     return {
       label: 'Bad',
-      accentClass: 'text-[#EA4335]',
-      panelClass: 'border-[#EA4335]/20 bg-[#EA4335]/8',
+      accentClass: 'text-danger',
+      panelClass: 'border-danger/20 bg-danger-soft',
       summary: 'SMART self-assessment failed. Back up this drive as soon as possible.',
     };
   }
@@ -112,8 +112,8 @@ function getAtaHealthAssessment(report: SmartReport) {
   if (cautionReasons.length > 0) {
     return {
       label: 'Caution',
-      accentClass: 'text-[#FBBC04]',
-      panelClass: 'border-[#FBBC04]/20 bg-[#FBBC04]/8',
+      accentClass: 'text-warning',
+      panelClass: 'border-warning/20 bg-warning-soft',
       summary: `Surface warning: ${cautionReasons.join(', ')} detected.`,
     };
   }
@@ -121,16 +121,16 @@ function getAtaHealthAssessment(report: SmartReport) {
   if ((report.udmaCrcErrors ?? 0) > 0) {
     return {
       label: 'Attention',
-      accentClass: 'text-[#4285F4]',
-      panelClass: 'border-[#4285F4]/20 bg-[#4285F4]/8',
+      accentClass: 'text-primary',
+      panelClass: 'border-primary/20 bg-primary-soft',
       summary: 'Disk surface looks healthy, but the link has recorded CRC/interface errors.',
     };
   }
 
   return {
     label: 'Good',
-    accentClass: 'text-[#34A853]',
-    panelClass: 'border-[#34A853]/20 bg-[#34A853]/8',
+    accentClass: 'text-success',
+    panelClass: 'border-success/20 bg-success-soft',
     summary: 'No critical HDD SMART warning attributes are currently elevated.',
   };
 }
@@ -140,8 +140,8 @@ function getHealthAssessment(report: SmartReport) {
     if (report.healthPassed === false) {
       return {
         label: 'Bad',
-        accentClass: 'text-[#EA4335]',
-        panelClass: 'border-[#EA4335]/20 bg-[#EA4335]/8',
+        accentClass: 'text-danger',
+        panelClass: 'border-danger/20 bg-danger-soft',
         summary: 'NVMe health check failed. Back up this drive immediately.',
       };
     }
@@ -152,15 +152,15 @@ function getHealthAssessment(report: SmartReport) {
     if (cautionReasons.length > 0) {
       return {
         label: 'Caution',
-        accentClass: 'text-[#FBBC04]',
-        panelClass: 'border-[#FBBC04]/20 bg-[#FBBC04]/8',
+        accentClass: 'text-warning',
+        panelClass: 'border-warning/20 bg-warning-soft',
         summary: `Warning: ${cautionReasons.join(', ')} detected.`,
       };
     }
     return {
       label: 'Good',
-      accentClass: 'text-[#34A853]',
-      panelClass: 'border-[#34A853]/20 bg-[#34A853]/8',
+      accentClass: 'text-success',
+      panelClass: 'border-success/20 bg-success-soft',
       summary: 'NVMe drive is operating normally with no critical warnings.',
     };
   }
@@ -186,14 +186,14 @@ function getAttributeHealthStatus(attr: SmartAttribute): AttributeHealthStatus {
 
 const ATTRIBUTE_ROW_CLASSES: Record<AttributeHealthStatus, string> = {
   ok: '',
-  warning: 'bg-[#FBBC04]/[0.06]',
-  danger: 'bg-[#EA4335]/[0.08]',
+  warning: 'bg-warning-soft',
+  danger: 'bg-danger-soft',
 };
 
 const ATTRIBUTE_DOT_CLASSES: Record<AttributeHealthStatus, string> = {
-  ok: 'bg-[#34A853]',
-  warning: 'bg-[#FBBC04]',
-  danger: 'bg-[#EA4335]',
+  ok: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
 };
 
 const KEY_ATTRIBUTE_IDS = new Set([1, 3, 4, 5, 7, 9, 10, 12, 177, 187, 188, 193, 194, 196, 197, 198, 199, 233, 241, 242]);
@@ -395,11 +395,11 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
     <div className="h-full min-w-0 overflow-y-auto p-6 space-y-5">
       {/* Device Header */}
       <div className="flex items-center gap-5 pb-5 border-b border-separator">
-        <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-[#3a3a3c]">
+        <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-fill border border-separator">
           <img src={TransportImg} alt={`${diskType} icon`} className="w-full h-full object-contain select-none" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-[#f5f5f7]">{device.displayName}</h2>
+          <h2 className="text-xl font-semibold text-foreground">{device.displayName}</h2>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <StatusBadge label={device.bsdName} type="default" />
             <StatusBadge label={diskType} type="info" />
@@ -409,24 +409,24 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
           </div>
           {(device.serial || report?.firmwareVersion) && (
             <div className="flex flex-wrap gap-x-4 mt-2">
-              {device.serial && <span className="text-xs text-[#6e6e73] font-mono">S/N: {device.serial}</span>}
-              {report?.firmwareVersion && <span className="text-xs text-[#6e6e73] font-mono">FW: {report.firmwareVersion}</span>}
+              {device.serial && <span className="text-xs text-muted font-mono">S/N: {device.serial}</span>}
+              {report?.firmwareVersion && <span className="text-xs text-muted font-mono">FW: {report.firmwareVersion}</span>}
             </div>
           )}
           {!device.isInternal && (device.linkSpeed || device.bridgeChip) && (
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {device.linkSpeed && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#4285F4]/10 border border-[#4285F4]/15">
-                  <Cable className="w-3 h-3 text-[#4285F4]" />
-                  <span className="text-[11px] font-medium text-[#4285F4]">
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary-soft border border-primary/20">
+                  <Cable className="w-3 h-3 text-primary" />
+                  <span className="text-[11px] font-medium text-primary">
                     {device.linkSpeed}
                   </span>
                 </div>
               )}
               {device.bridgeChip && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-separator bg-white/[0.03]">
-                  <HardDrive className="w-3 h-3 text-[#a1a1a6]" />
-                  <span className="text-[11px] font-medium text-[#a1a1a6]">
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-separator bg-control">
+                  <HardDrive className="w-3 h-3 text-muted" />
+                  <span className="text-[11px] font-medium text-muted">
                     {device.bridgeChip} bridge
                   </span>
                 </div>
@@ -434,7 +434,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
             </div>
           )}
           {device.connectionPath && !device.isInternal && (
-            <p className="text-[11px] text-[#6e6e73] mt-1.5">
+            <p className="text-[11px] text-muted mt-1.5">
               Path: {device.connectionPath}
             </p>
           )}
@@ -443,29 +443,30 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
       {loading && (
         <div className="space-y-3 animate-pulse">
-          <div className="h-4 bg-white/[0.06] rounded w-1/3"></div>
+          <div className="h-4 bg-fill rounded w-1/3"></div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
-            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
-            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
-            <div className="h-20 bg-white/[0.04] rounded-lg"></div>
+            <div className="h-20 bg-fill rounded-lg"></div>
+            <div className="h-20 bg-fill rounded-lg"></div>
+            <div className="h-20 bg-fill rounded-lg"></div>
+            <div className="h-20 bg-fill rounded-lg"></div>
           </div>
         </div>
       )}
 
       {!loading && report && !report.readable && !errorDismissed && (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-[#EA4335]/8 border border-[#EA4335]/15 relative">
-          <AlertTriangle className="w-5 h-5 text-[#EA4335] flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-danger-soft border border-danger/20 relative">
+          <AlertTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h4 className="font-semibold text-[#EA4335]">SMART Data Unavailable</h4>
-            <p className="text-sm mt-1 text-[#EA4335]/70">{report.failureReason}</p>
-            <p className="text-xs mt-2 text-[#6e6e73]">
+            <h4 className="font-semibold text-danger">SMART Data Unavailable</h4>
+            <p className="text-sm mt-1 text-danger/80">{report.failureReason}</p>
+            <p className="text-xs mt-2 text-muted">
               {getSmartUnavailableHint(device, report)}
             </p>
           </div>
           <button 
             onClick={() => setErrorDismissed(true)} 
-            className="p-1 hover:bg-white/[0.06] rounded-md transition-colors text-[#6e6e73] hover:text-[#a1a1a6]"
+            className="p-1 hover:bg-danger/10 rounded-md transition-colors text-muted hover:text-danger"
+            aria-label="Dismiss SMART warning"
           >
             <X className="w-4 h-4" />
           </button>
@@ -475,10 +476,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       {!loading && (
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <h3 className="text-sm font-medium text-[#98989d] flex items-center gap-1.5">
+            <h3 className="text-sm font-medium text-muted flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5" />
               Live Transfer Rate
-              <span className="text-[11px] text-[#48484a] ml-1">
+              <span className="text-[11px] text-faint ml-1">
                 {SPEED_SAMPLE_MS / 1000}s samples / {SPEED_WINDOW_SECONDS}s window
               </span>
             </h3>
@@ -488,8 +489,8 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
               onClick={() => setShowEma(prev => !prev)}
               className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
                 showEma
-                  ? 'bg-primary/15 text-[#4285F4] border border-primary/20'
-                  : 'bg-white/[0.04] text-[#6e6e73] border border-separator hover:text-[#a1a1a6] hover:bg-white/[0.06]'
+                  ? 'bg-primary-soft text-primary border border-primary/20'
+                  : 'bg-control text-muted border border-separator hover:text-primary hover:bg-control-hover'
               }`}
             >
               EMA {showEma ? 'On' : 'Off'}
@@ -497,25 +498,25 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
           </div>
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
-            <div className="rounded-lg border border-[#34A853]/15 bg-[#34A853]/6 px-3.5 py-2.5">
-              <div className="text-[11px] text-[#34A853]/70">Read Now</div>
-              <div className="mt-0.5 text-base font-semibold text-[#34A853] font-mono">
+            <div className="rounded-lg border border-success/20 bg-success-soft px-3.5 py-2.5">
+              <div className="text-[11px] text-success/80">Read Now</div>
+              <div className="mt-0.5 text-base font-semibold text-success font-mono">
                 {latestSample ? formatRate(latestSample.readSpeed) : 'Collecting...'}
               </div>
             </div>
-            <div className="rounded-lg border border-[#FBBC04]/15 bg-[#FBBC04]/6 px-3.5 py-2.5">
-              <div className="text-[11px] text-[#FBBC04]/70">Write Now</div>
-              <div className="mt-0.5 text-base font-semibold text-[#FBBC04] font-mono">
+            <div className="rounded-lg border border-warning/20 bg-warning-soft px-3.5 py-2.5">
+              <div className="text-[11px] text-warning/80">Write Now</div>
+              <div className="mt-0.5 text-base font-semibold text-warning font-mono">
                 {latestSample ? formatRate(latestSample.writeSpeed) : 'Collecting...'}
               </div>
             </div>
             <div className="rounded-lg border border-separator bg-surface px-3.5 py-2.5">
-              <div className="text-[11px] text-[#6e6e73]">Peak Read 60s</div>
-              <div className="mt-0.5 text-base font-semibold text-[#f5f5f7] font-mono">{formatRate(peakRead)}</div>
+              <div className="text-[11px] text-muted">Peak Read 60s</div>
+              <div className="mt-0.5 text-base font-semibold text-foreground font-mono">{formatRate(peakRead)}</div>
             </div>
             <div className="rounded-lg border border-separator bg-surface px-3.5 py-2.5">
-              <div className="text-[11px] text-[#6e6e73]">Peak Write 60s</div>
-              <div className="mt-0.5 text-base font-semibold text-[#f5f5f7] font-mono">{formatRate(peakWrite)}</div>
+              <div className="text-[11px] text-muted">Peak Write 60s</div>
+              <div className="mt-0.5 text-base font-semibold text-foreground font-mono">{formatRate(peakWrite)}</div>
             </div>
           </div>
 
@@ -528,13 +529,13 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                   data={speedHistory}
                   margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
                   <XAxis 
                     type="number"
                     dataKey="timestamp"
                     scale="time"
                     domain={[chartStart, chartEnd]}
-                    stroke="#48484a" 
+                    stroke="var(--chart-axis)" 
                     fontSize={10} 
                     tickMargin={10} 
                     minTickGap={20}
@@ -545,7 +546,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                   />
                   <YAxis 
                     domain={[0, yAxisMax]}
-                    stroke="#48484a" 
+                    stroke="var(--chart-axis)" 
                     fontSize={10} 
                     tickFormatter={(value) => formatRate(Number(value))}
                     axisLine={false}
@@ -553,42 +554,42 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                     width={78}
                   />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#1c1c1e', borderColor: '#3a3a3c', borderRadius: '8px', fontSize: '12px' }}
+                    contentStyle={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-separator)', borderRadius: '8px', boxShadow: 'var(--chart-tooltip-shadow)', fontSize: '12px' }}
                     itemStyle={{ padding: '2px 0' }}
                     labelFormatter={(label) => `${formatTimeLabel(Number(label))} · ${(SPEED_SAMPLE_MS / 1000).toFixed(0)}s avg`}
                     formatter={(value, name) => {
                       const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
                       return [formatRate(numericValue), String(name)];
                     }}
-                    labelStyle={{ color: '#98989d', marginBottom: '4px' }}
-                    cursor={{ stroke: '#48484a', strokeDasharray: '4 4' }}
+                    labelStyle={{ color: 'var(--color-muted)', marginBottom: '4px' }}
+                    cursor={{ stroke: 'var(--chart-axis)', strokeDasharray: '4 4' }}
                   />
                   <Line 
                     type="linear" 
                     dataKey="readSpeed" 
                     name="Read" 
-                    stroke="#34A853" 
+                    stroke="var(--color-success)" 
                     strokeWidth={1.5} 
                     dot={false}
                     isAnimationActive={false}
-                    activeDot={{ r: 3, fill: '#34A853', stroke: '#1c1c1e' }}
+                    activeDot={{ r: 3, fill: 'var(--color-success)', stroke: 'var(--color-surface)' }}
                   />
                   <Line 
                     type="linear" 
                     dataKey="writeSpeed" 
                     name="Write" 
-                    stroke="#FBBC04" 
+                    stroke="var(--color-warning)" 
                     strokeWidth={1.5} 
                     dot={false}
                     isAnimationActive={false}
-                    activeDot={{ r: 3, fill: '#FBBC04', stroke: '#1c1c1e' }}
+                    activeDot={{ r: 3, fill: 'var(--color-warning)', stroke: 'var(--color-surface)' }}
                   />
                   {showEma && (
                     <Line
                       type="linear"
                       dataKey="readEma"
                       name="Read EMA"
-                      stroke="#30db5b"
+                      stroke="var(--color-success)"
                       strokeOpacity={0.6}
                       strokeWidth={1}
                       strokeDasharray="4 4"
@@ -602,7 +603,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                       type="linear"
                       dataKey="writeEma"
                       name="Write EMA"
-                      stroke="#ffd60a"
+                      stroke="var(--color-warning)"
                       strokeOpacity={0.6}
                       strokeWidth={1}
                       strokeDasharray="4 4"
@@ -615,7 +616,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
               )}
             </div>
             {speedHistory.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-[#6e6e73] pointer-events-none">
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none">
                 Collecting 2s disk activity samples...
               </div>
             )}
@@ -627,18 +628,18 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
       {!loading && report && report.readable && (
         <>
           <div>
-            <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+            <h3 className="text-sm font-medium text-muted mb-2 flex items-center gap-1.5">
               <HeartPulse className="w-3.5 h-3.5" />
               Drive Snapshot
             </h3>
             <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1.9fr] gap-2">
               {health && (
                 <div className={`rounded-lg border px-4 py-3 ${health.panelClass}`}>
-                  <div className="text-[11px] text-[#6e6e73]">Health Assessment</div>
+                  <div className="text-[11px] text-muted">Health Assessment</div>
                   <div className={`mt-1.5 text-2xl font-semibold ${health.accentClass}`}>
                     {health.label}
                   </div>
-                  <p className="mt-1.5 text-[13px] text-[#a1a1a6] leading-5">
+                  <p className="mt-1.5 text-[13px] text-muted leading-5">
                     {health.summary}
                   </p>
                 </div>
@@ -678,7 +679,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
           {isAta && (report.reallocatedSectors !== undefined || report.currentPendingSectors !== undefined || report.offlineUncorrectable !== undefined || report.udmaCrcErrors !== undefined) && (
             <div>
-              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+              <h3 className="text-sm font-medium text-muted mb-2 flex items-center gap-1.5">
                 <TriangleAlert className="w-3.5 h-3.5" />
                 Surface & Reliability
               </h3>
@@ -693,7 +694,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
           {isAtaHdd && (
             <div>
-              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+              <h3 className="text-sm font-medium text-muted mb-2 flex items-center gap-1.5">
                 <Activity className="w-3.5 h-3.5" />
                 Mechanical Counters
               </h3>
@@ -708,7 +709,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
           {(report.firmwareVersion || report.sataVersion || report.interfaceSpeed || report.logicalSectorSize) && (
             <div>
-              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+              <h3 className="text-sm font-medium text-muted mb-2 flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5" />
                 Device Information
               </h3>
@@ -734,7 +735,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
           {(report.dataUnitsRead !== undefined || report.percentageUsed !== undefined) && (
             <div>
-              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+              <h3 className="text-sm font-medium text-muted mb-2 flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5" />
                 Usage Statistics
               </h3>
@@ -749,7 +750,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
           {(report.unsafeShutdowns !== undefined || report.mediaErrors !== undefined || report.errorLogEntries !== undefined) && (
             <div>
-              <h3 className="text-sm font-medium text-[#98989d] mb-2 flex items-center gap-1.5">
+              <h3 className="text-sm font-medium text-muted mb-2 flex items-center gap-1.5">
                 <TriangleAlert className="w-3.5 h-3.5" />
                 Error Counters
               </h3>
@@ -770,10 +771,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
           {displayedAttributes.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2.5">
-                <h3 className="text-sm font-medium text-[#98989d] flex items-center gap-1.5">
+                <h3 className="text-sm font-medium text-muted flex items-center gap-1.5">
                   <Database className="w-3.5 h-3.5" />
                   SMART Attributes
-                  <span className="text-[11px] text-[#48484a] ml-1">
+                  <span className="text-[11px] text-faint ml-1">
                     {displayedAttributes.length} of {report.rawAttributes?.length ?? 0}
                   </span>
                 </h3>
@@ -783,8 +784,8 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                     onClick={() => setShowAllAttributes(prev => !prev)}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
                       showAllAttributes
-                        ? 'bg-primary/15 text-[#4285F4] border border-primary/20'
-                        : 'bg-white/[0.04] text-[#6e6e73] border border-separator hover:text-[#a1a1a6] hover:bg-white/[0.06]'
+                        ? 'bg-primary-soft text-primary border border-primary/20'
+                        : 'bg-control text-muted border border-separator hover:text-primary hover:bg-control-hover'
                     }`}
                   >
                     {showAllAttributes ? 'Key Only' : 'Show All'}
@@ -794,7 +795,7 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
               <div className="rounded-lg border border-separator overflow-hidden">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="bg-surface-hover text-[#6e6e73] text-xs">
+                    <tr className="bg-surface-hover text-muted text-xs">
                       <th className="text-center py-2 px-1.5 font-medium w-7"></th>
                       <th className="text-left py-2 px-3 font-medium w-14">ID</th>
                       <th className="text-left py-2 px-3 font-medium">Attribute</th>
@@ -810,17 +811,17 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                       return (
                         <tr
                           key={attribute.id}
-                          className={`border-t border-separator ${index % 2 === 0 ? '' : 'bg-white/[0.015]'} ${ATTRIBUTE_ROW_CLASSES[status]}`}
+                          className={`border-t border-separator ${index % 2 === 0 ? 'bg-surface' : 'bg-background/45'} ${ATTRIBUTE_ROW_CLASSES[status]}`}
                         >
                           <td className="py-2 px-1.5 text-center">
                             <span className={`inline-block w-2 h-2 rounded-full ${ATTRIBUTE_DOT_CLASSES[status]}`} />
                           </td>
-                          <td className="py-2 px-3 text-[#a1a1a6] font-mono">{attribute.id}</td>
-                          <td className="py-2 px-3 text-[#e5e5ea]">{formatAttributeName(attribute.name)}</td>
-                          <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.value ?? '—'}</td>
-                          <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.worst ?? '—'}</td>
-                          <td className="py-2 px-3 text-right text-[#a1a1a6] font-mono">{attribute.threshold ?? '—'}</td>
-                          <td className="py-2 px-3 text-right text-[#e5e5ea] font-mono">{attribute.rawString ?? attribute.rawValue ?? '—'}</td>
+                          <td className="py-2 px-3 text-muted font-mono">{attribute.id}</td>
+                          <td className="py-2 px-3 text-foreground">{formatAttributeName(attribute.name)}</td>
+                          <td className="py-2 px-3 text-right text-muted font-mono">{attribute.value ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-muted font-mono">{attribute.worst ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-muted font-mono">{attribute.threshold ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-foreground font-mono">{attribute.rawString ?? attribute.rawValue ?? '—'}</td>
                         </tr>
                       );
                     })}
@@ -834,14 +835,14 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
 
       {device.volumes && device.volumes.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-[#98989d] mb-2.5 flex items-center gap-1.5">
+          <h3 className="text-sm font-medium text-muted mb-2.5 flex items-center gap-1.5">
             <Database className="w-3.5 h-3.5" />
             Volumes & File Systems
           </h3>
           <div className="rounded-lg border border-separator overflow-hidden">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="bg-surface-hover text-[#6e6e73] text-xs">
+                <tr className="bg-surface-hover text-muted text-xs">
                   <th className="text-left py-2 px-3 font-medium">Volume</th>
                   <th className="text-left py-2 px-3 font-medium">File System</th>
                   <th className="text-left py-2 px-3 font-medium w-32">Usage</th>
@@ -850,10 +851,10 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
               </thead>
               <tbody>
                 {device.volumes.map((vol, i) => (
-                  <tr key={vol.bsdName} className={`border-t border-separator ${i % 2 === 0 ? '' : 'bg-white/[0.015]'} hover:bg-white/[0.03] transition-colors`}>
+                  <tr key={vol.bsdName} className={`border-t border-separator ${i % 2 === 0 ? 'bg-surface' : 'bg-background/45'} hover:bg-surface-hover transition-colors`}>
                     <td className="py-2 px-3">
-                      <div className="font-medium text-[#e5e5ea]">{vol.name}</div>
-                      <div className="text-[11px] text-[#6e6e73] font-mono mt-0.5">{vol.mountPoint ? vol.mountPoint : vol.bsdName}</div>
+                      <div className="font-medium text-foreground">{vol.name}</div>
+                      <div className="text-[11px] text-muted font-mono mt-0.5">{vol.mountPoint ? vol.mountPoint : vol.bsdName}</div>
                     </td>
                     <td className="py-2 px-3">
                       <StatusBadge label={vol.fileSystem || 'Unknown'} type="info" />
@@ -862,24 +863,24 @@ export function SmartDetail({ device, report, loading }: SmartDetailProps) {
                       {vol.capacityUsed !== undefined && vol.sizeBytes > 0 ? (
                         <div className="flex flex-col gap-1 w-full max-w-[140px]">
                           <div className="flex justify-between text-xs">
-                            <span className="text-[#a1a1a6]">{formatSize(vol.capacityUsed)}</span>
-                            <span className="text-[#6e6e73] font-mono text-[10px]">{Math.round((vol.capacityUsed / vol.sizeBytes) * 100)}%</span>
+                            <span className="text-muted">{formatSize(vol.capacityUsed)}</span>
+                            <span className="text-muted font-mono text-[10px]">{Math.round((vol.capacityUsed / vol.sizeBytes) * 100)}%</span>
                           </div>
-                          <div className="h-1 w-full bg-white/[0.08] rounded-full overflow-hidden">
+                          <div className="h-1 w-full bg-fill rounded-full overflow-hidden">
                             <div 
                               className="h-full rounded-full"
                               style={{ 
                                 width: `${Math.min(100, Math.max(0, (vol.capacityUsed / vol.sizeBytes) * 100))}%`,
-                                backgroundColor: ((vol.capacityUsed / vol.sizeBytes) * 100) > 90 ? '#EA4335' : '#4285F4'
+                                backgroundColor: ((vol.capacityUsed / vol.sizeBytes) * 100) > 90 ? 'var(--color-danger)' : 'var(--color-primary)'
                               }}
                             />
                           </div>
                         </div>
                       ) : (
-                        <span className="text-[#48484a] text-xs">—</span>
+                        <span className="text-faint text-xs">—</span>
                       )}
                     </td>
-                    <td className="py-2 px-3 text-right text-[#a1a1a6]">
+                    <td className="py-2 px-3 text-right text-muted">
                       {formatSize(vol.sizeBytes)}
                     </td>
                   </tr>

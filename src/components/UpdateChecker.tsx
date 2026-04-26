@@ -197,7 +197,8 @@ export function UpdateChecker() {
             setPopoverOpen((v) => !v);
           }
         }}
-        className="relative p-1.5 rounded-md hover:bg-white/[0.08] active:bg-white/[0.12] transition-colors group"
+        className="relative p-1.5 rounded-md text-subtle hover:bg-control-hover hover:text-primary active:bg-primary-soft transition-colors"
+        aria-label="检查更新"
         title={
           status === 'checking'
             ? '正在检查更新…'
@@ -215,13 +216,13 @@ export function UpdateChecker() {
         }
       >
         {status === 'checking' || status === 'downloading' ? (
-          <Loader2 className="w-4 h-4 text-[#98989d] animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
           <ArrowUpCircle
             className={`w-4 h-4 transition-colors ${
               hasBadge
                 ? 'text-primary'
-                : 'text-[#98989d] group-hover:text-[#f5f5f7]'
+                : ''
             }`}
           />
         )}
@@ -233,57 +234,58 @@ export function UpdateChecker() {
       {popoverOpen && (
         <div
           ref={popoverRef}
-          className="absolute right-0 top-full mt-2 w-80 bg-surface border border-separator rounded-xl shadow-2xl shadow-black/40 overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+          className="absolute right-0 top-full mt-2 w-80 bg-surface-raised border border-separator rounded-lg shadow-[var(--popover-shadow)] overflow-hidden z-50 animate-in fade-in slide-in-from-top-1 duration-150"
         >
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <h3 className="text-[13px] font-semibold text-[#f5f5f7]">
+            <h3 className="text-[13px] font-semibold text-foreground">
               软件更新
             </h3>
             <button
               onClick={() => setPopoverOpen(false)}
-              className="p-0.5 rounded hover:bg-white/[0.08] transition-colors"
+              className="p-0.5 rounded text-subtle hover:bg-control-hover hover:text-foreground transition-colors"
+              aria-label="关闭更新弹窗"
             >
-              <X className="w-3.5 h-3.5 text-[#98989d]" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {status === 'available' && info && (
             <div className="px-4 pb-4">
               <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-[20px] font-bold text-[#f5f5f7] tracking-tight">
+                <span className="text-[20px] font-bold text-foreground">
                   v{info.latestVersion}
                 </span>
-                <span className="text-[11px] text-[#98989d] font-medium px-1.5 py-0.5 bg-primary/15 text-primary rounded-full">
+                <span className="text-[11px] font-medium px-1.5 py-0.5 bg-primary-soft text-primary rounded-full border border-primary/20">
                   新版本
                 </span>
               </div>
-              <p className="text-[12px] text-[#6e6e73] mb-3">
+              <p className="text-[12px] text-muted mb-3">
                 发布于 {formatDate(info.publishedAt)} · 当前版本 v{info.currentVersion}
               </p>
 
               {releaseNotes && (
-                <div className="mb-3 max-h-28 overflow-y-auto rounded-lg bg-background/60 p-2.5">
-                  <p className="text-[12px] text-[#a1a1a6] leading-relaxed whitespace-pre-wrap">
+                <div className="mb-3 max-h-28 overflow-y-auto rounded-lg bg-background p-2.5 border border-separator">
+                  <p className="text-[12px] text-muted leading-relaxed whitespace-pre-wrap">
                     {releaseNotes}
                   </p>
                 </div>
               )}
 
-              <p className="text-[12px] text-[#6e6e73] mb-3">
+              <p className="text-[12px] text-muted mb-3">
                 {info.availabilityMessage ?? '点击“立即更新”后会在后台下载，下载完成后会弹出安装提示。'}
               </p>
 
               <div className="flex gap-2">
                 <button
                   onClick={() => void startDownload()}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-white text-[13px] font-medium rounded-lg transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover active:bg-primary text-white text-[13px] font-medium rounded-lg transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
                   {isManualDownloadOnly ? '下载更新' : '立即更新'}
                 </button>
                 <button
                   onClick={handleOpenRelease}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-control hover:bg-control-hover active:bg-primary-soft text-foreground text-[13px] font-medium rounded-lg border border-separator transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   详情
@@ -296,30 +298,30 @@ export function UpdateChecker() {
             <div className="px-4 pb-4">
               <div className="mb-3">
                 <div className="flex items-baseline gap-2 mb-1">
-                  <span className="text-[20px] font-bold text-[#f5f5f7] tracking-tight">
+                  <span className="text-[20px] font-bold text-foreground">
                     v{info.latestVersion}
                   </span>
-                  <span className="text-[11px] text-[#98989d] font-medium px-1.5 py-0.5 bg-white/[0.06] rounded-full">
+                  <span className="text-[11px] text-muted font-medium px-1.5 py-0.5 bg-control border border-separator rounded-full">
                     正在下载
                   </span>
                 </div>
-                <p className="text-[12px] text-[#6e6e73]">
+                <p className="text-[12px] text-muted">
                   更新正在后台下载，你可以继续使用应用。
                 </p>
               </div>
 
-              <div className="rounded-lg bg-background/60 p-3">
-                <div className="flex items-center justify-between text-[12px] text-[#a1a1a6] mb-2">
+              <div className="rounded-lg bg-background p-3 border border-separator">
+                <div className="flex items-center justify-between text-[12px] text-muted mb-2">
                   <span>下载进度</span>
                   <span>{progressPercent}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                <div className="h-2 rounded-full bg-fill overflow-hidden">
                   <div
                     className="h-full bg-primary transition-[width] duration-300"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-[#6e6e73] mt-2">
+                <div className="flex items-center justify-between text-[11px] text-muted mt-2">
                   <span>
                     {progress?.total
                       ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)}`
@@ -334,26 +336,26 @@ export function UpdateChecker() {
           {status === 'downloaded' && info && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-3 text-center">
-                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
+                <div className="w-10 h-10 rounded-full bg-success-soft flex items-center justify-center mb-2 border border-success/20">
                   <Download className="w-5 h-5 text-success" />
                 </div>
-                <p className="text-[13px] font-medium text-[#f5f5f7]">
+                <p className="text-[13px] font-medium text-foreground">
                   更新已下载完成
                 </p>
-                <p className="text-[12px] text-[#6e6e73] mt-0.5">
+                <p className="text-[12px] text-muted mt-0.5">
                   点击安装后会退出当前进程并更新到 v{info.latestVersion}
                 </p>
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => void installDownloadedUpdate()}
-                  className="flex-1 px-3 py-1.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-white text-[13px] font-medium rounded-lg transition-colors"
+                  className="flex-1 px-3 py-1.5 bg-primary hover:bg-primary-hover active:bg-primary text-white text-[13px] font-medium rounded-lg transition-colors"
                 >
                   安装并重启
                 </button>
                 <button
                   onClick={handleOpenRelease}
-                  className="px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-control hover:bg-control-hover active:bg-primary-soft text-foreground text-[13px] font-medium rounded-lg border border-separator transition-colors"
                 >
                   详情
                 </button>
@@ -364,19 +366,19 @@ export function UpdateChecker() {
           {status === 'latest' && info && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-3 text-center">
-                <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
+                <div className="w-10 h-10 rounded-full bg-success-soft flex items-center justify-center mb-2 border border-success/20">
                   <ArrowUpCircle className="w-5 h-5 text-success" />
                 </div>
-                <p className="text-[13px] font-medium text-[#f5f5f7]">
+                <p className="text-[13px] font-medium text-foreground">
                   已是最新版本
                 </p>
-                <p className="text-[12px] text-[#6e6e73] mt-0.5">
+                <p className="text-[12px] text-muted mt-0.5">
                   v{info.currentVersion}
                 </p>
               </div>
               <button
                 onClick={() => void check(true)}
-                className="w-full px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                className="w-full px-3 py-1.5 bg-control hover:bg-control-hover active:bg-primary-soft text-foreground text-[13px] font-medium rounded-lg border border-separator transition-colors"
               >
                 重新检查
               </button>
@@ -386,24 +388,24 @@ export function UpdateChecker() {
           {status === 'error' && (
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-3 text-center">
-                <p className="text-[13px] text-[#EA4335] font-medium mb-1">
+                <p className="text-[13px] text-danger font-medium mb-1">
                   更新失败
                 </p>
-                <p className="text-[12px] text-[#6e6e73]">
+                <p className="text-[12px] text-muted">
                   {displayError}
                 </p>
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => void check(true)}
-                  className="flex-1 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                  className="flex-1 px-3 py-1.5 bg-control hover:bg-control-hover active:bg-primary-soft text-foreground text-[13px] font-medium rounded-lg border border-separator transition-colors"
                 >
                   重试
                 </button>
                 {info?.releaseUrl && (
                   <button
                     onClick={handleOpenRelease}
-                    className="px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.14] text-[#f5f5f7] text-[13px] font-medium rounded-lg transition-colors"
+                    className="px-3 py-1.5 bg-control hover:bg-control-hover active:bg-primary-soft text-foreground text-[13px] font-medium rounded-lg border border-separator transition-colors"
                   >
                     详情
                   </button>
@@ -416,7 +418,7 @@ export function UpdateChecker() {
             <div className="px-4 pb-4">
               <div className="flex flex-col items-center py-4 text-center">
                 <Loader2 className="w-6 h-6 text-primary animate-spin mb-2" />
-                <p className="text-[13px] text-[#a1a1a6]">正在检查更新…</p>
+                <p className="text-[13px] text-muted">正在检查更新…</p>
               </div>
             </div>
           )}

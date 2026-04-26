@@ -1,35 +1,113 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4285F4;
-  --color-success: #34A853;
-  --color-warning: #FBBC04;
-  --color-danger: #EA4335;
-  --color-surface: #2c2c2e;
-  --color-surface-hover: #3a3a3c;
-  --color-background: #1c1c1e;
-  --color-separator: rgba(255, 255, 255, 0.08);
-  --color-tertiary-label: rgba(255, 255, 255, 0.25);
-  --color-sidebar: #252527;
+  --color-primary: #1a73e8;
+  --color-primary-hover: #1765cc;
+  --color-primary-soft: #e8f0fe;
+  --color-success: #188038;
+  --color-success-soft: #e6f4ea;
+  --color-warning: #f9ab00;
+  --color-warning-soft: #fef7e0;
+  --color-danger: #d93025;
+  --color-danger-soft: #fce8e6;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: #f1f3f4;
+  --color-background: #f8fafd;
+  --color-sidebar: #f1f3f4;
+  --color-separator: #dadce0;
+  --color-foreground: #202124;
+  --color-muted: #5f6368;
+  --color-subtle: #80868b;
+  --color-faint: #9aa0a6;
+  --color-fill: #e8eaed;
+  --color-control: #f1f3f4;
+  --color-control-hover: #e8f0fe;
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
   --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #8ab4f8;
+    --color-primary-hover: #aecbfa;
+    --color-primary-soft: rgba(138, 180, 248, 0.16);
+    --color-success: #81c995;
+    --color-success-soft: rgba(129, 201, 149, 0.14);
+    --color-warning: #fdd663;
+    --color-warning-soft: rgba(253, 214, 99, 0.14);
+    --color-danger: #f28b82;
+    --color-danger-soft: rgba(242, 139, 130, 0.14);
+    --color-surface: #2b2c2f;
+    --color-surface-raised: #303134;
+    --color-surface-hover: #3c4043;
+    --color-background: #202124;
+    --color-sidebar: #17181a;
+    --color-separator: #3c4043;
+    --color-foreground: #e8eaed;
+    --color-muted: #bdc1c6;
+    --color-subtle: #9aa0a6;
+    --color-faint: #5f6368;
+    --color-fill: #303134;
+    --color-control: #303134;
+    --color-control-hover: #3c4043;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --chart-grid: rgba(60, 64, 67, 0.12);
+    --chart-axis: #80868b;
+    --chart-tooltip-shadow: 0 12px 32px rgba(60, 64, 67, 0.18);
+    --popover-shadow: 0 18px 48px rgba(60, 64, 67, 0.20);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --chart-grid: rgba(232, 234, 237, 0.10);
+    --chart-axis: #9aa0a6;
+    --chart-tooltip-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+    --popover-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+  }
+}
+
+html,
 body {
-  @apply bg-background text-[#f5f5f7] overflow-y-scroll antialiased selection:bg-primary/30;
+  @apply h-full bg-background text-foreground antialiased selection:bg-primary-soft selection:text-foreground;
+  letter-spacing: 0;
+}
+
+body {
+  @apply overflow-hidden;
+}
+
+#root {
+  @apply h-full;
+}
+
+button {
+  font: inherit;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-muted) 24%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: color-mix(in srgb, var(--color-muted) 38%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }

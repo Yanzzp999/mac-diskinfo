@@ -76,15 +76,15 @@ function App() {
   }, [loadSmartReport, selectedDevice]);
 
   return (
-    <div className="h-screen flex flex-col bg-background text-[#f5f5f7] overflow-hidden">
+    <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       <header
-        className="flex-shrink-0 bg-sidebar/80 backdrop-blur-xl border-b border-separator z-10"
+        className="flex-shrink-0 bg-surface/90 backdrop-blur-xl border-b border-separator z-10"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="px-5 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <img src={appIcon} alt="mac-diskinfo" className="w-8 h-8 rounded-[7px]" />
-            <h1 className="text-[15px] font-semibold text-[#f5f5f7]">
+            <h1 className="text-[15px] font-semibold text-foreground">
               mac-diskinfo
             </h1>
           </div>
@@ -93,34 +93,41 @@ function App() {
             <button
               onClick={() => loadDisks(true)}
               disabled={loading}
-              className="p-1.5 rounded-md hover:bg-white/[0.08] active:bg-white/[0.12] transition-colors disabled:opacity-40 disabled:cursor-not-allowed group"
+              className="p-1.5 rounded-md text-subtle hover:bg-control-hover hover:text-primary active:bg-primary-soft transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               title="Refresh"
+              aria-label="Refresh disks"
             >
-              <RefreshCw className={`w-4 h-4 text-[#98989d] group-hover:text-[#f5f5f7] transition-colors ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-64 flex-shrink-0 border-r border-separator bg-sidebar overflow-y-auto p-2 space-y-0.5">
+        <aside className="w-[17.5rem] flex-shrink-0 border-r border-separator bg-sidebar overflow-y-auto p-2.5">
+          <div className="flex items-center justify-between px-2 pb-2">
+            <h2 className="text-[11px] font-semibold uppercase text-subtle">Disks</h2>
+            <span className="text-[11px] font-medium text-muted">{devices.length}</span>
+          </div>
           {loading ? (
             <div className="space-y-1.5 p-1">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-14 bg-white/[0.04] rounded-lg animate-pulse"></div>
+                <div key={i} className="h-[4.25rem] bg-fill rounded-lg animate-pulse"></div>
               ))}
             </div>
           ) : devices.length > 0 ? (
-            devices.map(device => (
-              <DiskCard
-                key={device.id}
-                device={device}
-                selected={device.id === selectedId}
-                onClick={() => setSelectedId(device.id)}
-              />
-            ))
+            <div className="space-y-1">
+              {devices.map(device => (
+                <DiskCard
+                  key={device.id}
+                  device={device}
+                  selected={device.id === selectedId}
+                  onClick={() => setSelectedId(device.id)}
+                />
+              ))}
+            </div>
           ) : (
-            <div className="text-center py-8 text-[#6e6e73] text-sm">
+            <div className="text-center py-8 text-muted text-sm">
               <HardDrive className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p>No disks found</p>
             </div>
@@ -136,10 +143,10 @@ function App() {
               loading={reportLoading && !reports[selectedId!]}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-[#6e6e73]">
+            <div className="h-full flex items-center justify-center text-muted">
               <div className="text-center">
                 <HardDrive className="w-14 h-14 mx-auto mb-4 opacity-20" />
-                <p className="text-base font-medium text-[#a1a1a6]">Select a disk</p>
+                <p className="text-base font-medium text-foreground">Select a disk</p>
                 <p className="text-sm mt-1">Choose a disk from the sidebar to view details</p>
               </div>
             </div>
